@@ -1280,6 +1280,7 @@ function Pharmacy101ExtensionMockup() {
 
   const [copiedById, setCopiedById] = React.useState({});
   const [pendingButtonById, setPendingButtonById] = React.useState({});
+  const [pendingSavingById, setPendingSavingById] = React.useState({});
   const [resolvedButtonById, setResolvedButtonById] = React.useState({});
 
   const copyMessage = async () => {
@@ -1293,22 +1294,30 @@ function Pharmacy101ExtensionMockup() {
     }, 1500);
   };
 
-  const markAsPending = () => {
+  const markAsPending = async () => {
     const caseId = active?.id;
     if (!caseId) return;
+    if (pendingSavingById[caseId]) return;
+    setPendingSavingById((prev) => ({ ...prev, [caseId]: true }));
+
     const pendingOriginMeta = getPendingOriginMeta(active);
-    setCaseStatuses((prev) => ({ ...prev, [caseId]: "pending" }));
-    setPendingSubStatus((prev) => ({
-      ...prev,
-      [caseId]: pendingOriginMeta?.subStatus || "Awaiting clarification",
-    }));
-    setPendingOriginById((prev) => ({
-      ...prev,
-      [caseId]: pendingOriginMeta,
-    }));
-    setPendingMovedAtById((prev) => ({ ...prev, [caseId]: Date.now() }));
-    setPendingButtonById((prev) => ({ ...prev, [caseId]: true }));
-    setActiveCaseId(caseId);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      setCaseStatuses((prev) => ({ ...prev, [caseId]: "pending" }));
+      setPendingSubStatus((prev) => ({
+        ...prev,
+        [caseId]: pendingOriginMeta?.subStatus || "Awaiting clarification",
+      }));
+      setPendingOriginById((prev) => ({
+        ...prev,
+        [caseId]: pendingOriginMeta,
+      }));
+      setPendingMovedAtById((prev) => ({ ...prev, [caseId]: Date.now() }));
+      setPendingButtonById((prev) => ({ ...prev, [caseId]: true }));
+      setActiveCaseId(caseId);
+    } finally {
+      setPendingSavingById((prev) => ({ ...prev, [caseId]: false }));
+    }
   };
 
   const markResolved = () => {
@@ -1563,8 +1572,17 @@ function Pharmacy101ExtensionMockup() {
             <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
               <button
                 type="button"
-                onClick={copyMessage}
+                onClick={markResolved}
                 className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-slate-700 active:bg-slate-800 transition-colors"
+              >
+                {resolvedButtonById[active?.id]
+                  ? "Resolved"
+                  : "Mark Resolved"}
+              </button>
+              <button
+                type="button"
+                onClick={copyMessage}
+                className="rounded-xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
                 {copiedById[active?.id]
                   ? "Copied"
@@ -1573,20 +1591,14 @@ function Pharmacy101ExtensionMockup() {
               <button
                 type="button"
                 onClick={markAsPending}
-                className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+                disabled={Boolean(pendingSavingById[active?.id])}
+                className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {pendingButtonById[active?.id]
-                  ? "Pending"
-                  : "Send to Pending"}
-              </button>
-              <button
-                type="button"
-                onClick={markResolved}
-                className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
-              >
-                {resolvedButtonById[active?.id]
-                  ? "Resolved"
-                  : "Mark Resolved"}
+                {pendingSavingById[active?.id]
+                  ? "Saving..."
+                  : pendingButtonById[active?.id]
+                    ? "Pending"
+                    : "Send to Pending"}
               </button>
             </div>
 
