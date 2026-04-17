@@ -94,9 +94,6 @@ function Pharmacy101ExtensionMockup() {
   const [prescriptionInput, setPrescriptionInput] = React.useState("");
   const [sourceRefInput, setSourceRefInput] = React.useState("");
   const [inputFeedback, setInputFeedback] = React.useState(null);
-  const [interpretedAsText, setInterpretedAsText] = React.useState("");
-  const [auditCount, setAuditCount] = React.useState(0);
-  const [isExportingAudit, setIsExportingAudit] = React.useState(false);
   const [notesById, setNotesById] = React.useState({});
   const [sourceRefById, setSourceRefById] = React.useState({});
   const [pendingSubStatus, setPendingSubStatus] = React.useState({});
@@ -116,49 +113,6 @@ function Pharmacy101ExtensionMockup() {
       setActiveCaseId(cases[0].id);
     }
   }, [cases, activeCaseId]);
-
-  const refreshAuditMeta = React.useCallback(async () => {
-    try {
-      const response = await fetch("http://localhost:8000/audit/meta");
-      if (!response.ok) {
-        setAuditCount(0);
-        return;
-      }
-      const data = await response.json();
-      setAuditCount(Number(data?.total || 0));
-    } catch (err) {
-      setAuditCount(0);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    refreshAuditMeta();
-  }, [refreshAuditMeta]);
-
-  const handleExportAuditLog = async () => {
-    if (isExportingAudit || auditCount <= 0) return;
-    setIsExportingAudit(true);
-    try {
-      const response = await fetch("http://localhost:8000/audit/export.csv");
-      if (!response.ok) {
-        throw new Error("Export failed");
-      }
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      link.href = downloadUrl;
-      link.download = `pharmacy101_audit_log_${stamp}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-    } catch (err) {
-      setInputFeedback({ type: "invalid", message: "Could not export audit log." });
-    } finally {
-      setIsExportingAudit(false);
-    }
-  };
 
   const HIGH_RISK_PRN_DRUGS = [
     "sumatriptan",
@@ -393,7 +347,7 @@ function Pharmacy101ExtensionMockup() {
 
     const lane = item.lane;
 
-    // VERIFY — no confidence displayed
+    // VERIFY � no confidence displayed
     if (lane === "VERIFY AS ENTERED" || lane === "NONE") return null;
 
     const structural = (item.structural || "").toLowerCase();
@@ -408,7 +362,7 @@ function Pharmacy101ExtensionMockup() {
     const minor_issue         = structural.includes("minor");
     const borderline_hold     = (lane === "CLARIFY USE" || lane === "COMPLETE") && item.affects === "duration";
 
-    // HOLD lane (CHALLENGE) — red palette
+    // HOLD lane (CHALLENGE) � red palette
     // HIGH: contradiction, not followable, or high-impact missing | bold, full opacity
     // MEDIUM: still HOLD but less clearly critical     | medium weight, ~85% opacity
     // LOW: not used for HOLD
@@ -424,7 +378,7 @@ function Pharmacy101ExtensionMockup() {
       };
     }
 
-    // ADDRESS lane (CLARIFY USE, COMPLETE) — amber palette
+    // ADDRESS lane (CLARIFY USE, COMPLETE) � amber palette
     // HIGH: borderline-hold concern             | bold, full opacity
     // MEDIUM: clear need for clarification      | medium weight, ~88% opacity
     // LOW: minor issue / low-risk ambiguity     | normal weight, ~65% opacity
@@ -461,30 +415,13 @@ function Pharmacy101ExtensionMockup() {
     return `Fast Lane: ${fastLane} | Final Lane: ${finalLane}`;
   };
 
-  const getPrimaryMessage = (item) => {
-    const issueLine = String(item?.issue_line || "").trim();
-    const actionLine = String(item?.action_line || "").trim();
-    const whyThisMatters = String(item?.why_this_matters || "").trim();
-
-    if (issueLine && actionLine) return `${issueLine}. ${actionLine}`;
-    if (actionLine) return actionLine;
-    if (issueLine) return issueLine;
-    if (whyThisMatters) return whyThisMatters;
-
-    const fullMessage = String(item?.message || "").trim();
-    if (!fullMessage || fullMessage === "No message needed.") return "No action needed.";
-
-    const firstSentence = fullMessage.split(/[.!?]/)[0].trim();
-    return firstSentence ? `${firstSentence}.` : fullMessage;
-  };
-
   const getLaneIcon = (laneLabel) => {
     const iconMap = {
-      "HOLD NOW": "🔴",
-      "ADDRESS DURING WORKFLOW": "🟠",
-      "VERIFY": "🟢",
-      "PENDING": "🟡",
-      "RESOLVED": "🟢",
+      "HOLD NOW": "??",
+      "ADDRESS DURING WORKFLOW": "??",
+      "VERIFY": "??",
+      "PENDING": "??",
+      "RESOLVED": "??",
     };
     return iconMap[laneLabel] || "";
   };
@@ -495,7 +432,7 @@ function Pharmacy101ExtensionMockup() {
 
     const sigLower = item.sig.toLowerCase();
     const context = sigLower.includes("prn") || sigLower.includes("as needed") ? "PRN" : "Scheduled";
-    return `${item.title} � ${context}`;
+    return `${item.title} ? ${context}`;
   };
 
   const getPatternTemplate = (patternKey) => {
@@ -609,7 +546,7 @@ function Pharmacy101ExtensionMockup() {
     const textLower = (rawText || "").toLowerCase();
     const sigLower  = (sig || "").toLowerCase();
 
-    // ── Core signals ─────────────────────────────────────────────────
+    // -- Core signals -------------------------------------------------
     const hasPrn       = /\bprn\b|as needed/.test(sigLower);
     const hasScheduled = /\bdaily\b|once daily|\bnightly\b|at bedtime|\bqhs\b|every\s*\d+\s*(h|hr|hour)s?\b|\bbid\b|twice daily|\btid\b|three times daily|\bqid\b|four times daily/.test(sigLower);
     const hasDuration  = /for\s+\d+\s*(day|days|week|weeks)|x\s*\d+\s*(day|days|week|weeks)|until\s+(gone|finished)|stop\s+after/.test(sigLower);
@@ -629,7 +566,7 @@ function Pharmacy101ExtensionMockup() {
     const isAzithromycin      = /azithromycin|z-?pak|zpack/.test(textLower);
     const isPackageCourse     = /z-?pak|zpack|dosepak|dose pack|starter pack|medrol|pak/i.test(rawText || "");
     const hasTaper            = /\bthen\b|taper|decrease|reduce/.test(sigLower);
-    const hasDaySequence      = /day\s*1|days?\s*2\s*[-–]\s*5|for\s*5\s*days/.test(sigLower);
+    const hasDaySequence      = /day\s*1|days?\s*2\s*[-�]\s*5|for\s*5\s*days/.test(sigLower);
     const hasCountTransition  = /2\s+tablets?.*1\s+tablet|500\s*mg.*250\s*mg/.test(textLower);
     const azithromycinQtyMismatch = isAzithromycin && Number.isFinite(qty) && qty !== 6;
     const packageWithoutStructure = isPackageCourse && !hasDaySequence && !hasCountTransition && !hasTaper;
@@ -661,7 +598,7 @@ function Pharmacy101ExtensionMockup() {
     const couldPatientMisuseIfFollowedExactly = !instructionsFollowable || !exposureBounded || !noContradiction;
     if (couldPatientMisuseIfFollowedExactly) return "HOLD";
 
-    // ── VERIFY: clean and self-contained ────────────────────────────
+    // -- VERIFY: clean and self-contained ----------------------------
     const verifyReady =
       /^take\s+\d+(?:\.\d+)?\s+\w+/.test(sigLower) &&
       hasRoute &&
@@ -670,14 +607,14 @@ function Pharmacy101ExtensionMockup() {
 
     if (verifyReady) return "VERIFY";
 
-    // ── ADDRESS: safe but imperfect ──────────────────────────────────
+    // -- ADDRESS: safe but imperfect ----------------------------------
     // Cleared all HOLD checks. Prescription is executable as written
     // but has at least one minor gap. Five named ADDRESS patterns:
-    //   A1: nonStandardFreq  — unusual but explicitly stated frequency
-    //   A2: missingRoute     — dose + schedule present; route inferrable
-    //   A3: likelyStandard   — known chronic agent with interpretable sig
-    //   A4: lowRiskPrnClear  — PRN with max dose stated, no conflict
-    //   A5: coreSigPresent   — has dose and frequency in imperfect form
+    //   A1: nonStandardFreq  � unusual but explicitly stated frequency
+    //   A2: missingRoute     � dose + schedule present; route inferrable
+    //   A3: likelyStandard   � known chronic agent with interpretable sig
+    //   A4: lowRiskPrnClear  � PRN with max dose stated, no conflict
+    //   A5: coreSigPresent   � has dose and frequency in imperfect form
     const nonStandardFreq  = /every\s+\d+\s*(h|hr|hour)s?\b/.test(sigLower) &&
                              !/every\s+(4|6|8|12|24)\s*(h|hr|hour)s?\b/.test(sigLower);
     const weeklyWithAnchor = /twice\s+weekly|three\s+times\s+weekly|2x\s*(?:per\s*)?week|3x\s*(?:per\s*)?week/.test(sigLower);
@@ -688,7 +625,7 @@ function Pharmacy101ExtensionMockup() {
     const coreSigPresent   = (hasScheduled || hasPrn) && /\d/.test(sigLower); // A5
 
     if (nonStandardFreq || weeklyWithAnchor || missingRoute || likelyStandard || lowRiskPrnClear || coreSigPresent) {
-      return "ADDRESS"; // A1–A5: safe but imperfect
+      return "ADDRESS"; // A1�A5: safe but imperfect
     }
     return "ADDRESS"; // fallback: cleared HOLD, did not reach VERIFY
   };
@@ -804,7 +741,7 @@ function Pharmacy101ExtensionMockup() {
       const isPackageCourse = /z-?pak|zpack|dosepak|dose pack|starter pack|medrol|pak/i.test(rawText || "");
       const isAzithromycinPackage = /azithromycin|z-?pak|zpack/.test(textLower);
       const hasTaperStructure = /\bthen\b|taper|decrease|reduce/.test(sigLower);
-      const hasExplicitDaySequence = /day\s*1|days?\s*2\s*[-–]\s*5|for\s*5\s*days/.test(sigLower);
+      const hasExplicitDaySequence = /day\s*1|days?\s*2\s*[-�]\s*5|for\s*5\s*days/.test(sigLower);
       const hasTabletCountTransition = /2\s+tablets?.*1\s+tablet|500\s*mg.*250\s*mg/.test(textLower);
       const azithromycinPackageQtyMismatch = isAzithromycinPackage && Number.isFinite(qty) && qty !== 6;
       const azithromycinPackagePatternMismatch = isAzithromycinPackage && !hasExplicitDaySequence && !hasTabletCountTransition;
@@ -1060,135 +997,39 @@ function Pharmacy101ExtensionMockup() {
     };
   };
 
-  const buildInterpretedAsText = (nextCase) => {
-    if (!nextCase) return "";
+  const handleAnalyze = () => {
+    const nextCase = buildCaseFromInput(prescriptionInput);
+    if (!nextCase) return;
 
-    const displayDrug = String(nextCase.title || "")
-      .toLowerCase()
-      .replace(/\b([0-9]+(?:\.[0-9]+)?)\s*gm\b/g, "$1 g")
-      .replace(/\b([0-9]+(?:\.[0-9]+)?)\s*ug\b/g, "$1 mcg")
-      .replace(/\b([0-9]+(?:\.[0-9]+)?)\s*(mg|mcg|g)\b/g, "$1 $2")
-      .replace(/\s+/g, " ")
-      .trim()
-      .split(" ")
-      .map((token) => {
-        if (/^[0-9]+(?:\.[0-9]+)?$/.test(token)) return token;
-        if (/^(mg|mcg|g)$/.test(token)) return token;
-        return token.charAt(0).toUpperCase() + token.slice(1);
-      })
-      .join(" ");
-
-    const sig = String(nextCase.sig || "").toLowerCase();
-    const sigTokens = [];
-
-    if (/\b(four times daily|qid|every\s*6\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("QID");
-    else if (/\b(three times daily|tid|every\s*8\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("TID");
-    else if (/\b(twice daily|bid|every\s*12\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("BID");
-    else if (/\b(nightly|at bedtime|qhs)\b/.test(sig)) sigTokens.push("QHS");
-    else if (/\b(once daily|daily|qd|every\s*24\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("QD");
-
-    if (/\b(as needed|prn)\b/.test(sig)) sigTokens.push("PRN");
-    if (sigTokens.length === 0) sigTokens.push("Freq Unspecified");
-
-    const parts = [displayDrug, ...sigTokens, `Qty ${nextCase.qty}`].filter(Boolean);
-    return parts.join(" | ");
-  };
-
-  const handleAnalyze = async () => {
-  if (!prescriptionInput.trim()) return;
-
-  setInputFeedback({ type: "loading", message: "Analyzing..." });
-
-  try {
-    const response = await fetch("http://localhost:8000/analyze", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        raw_text: prescriptionInput,
-        source_ref: sourceRefInput || null,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (data.status === "INVALID") {
-      setInputFeedback({ type: "invalid", message: data.error });
+    if (nextCase.input_status === "INVALID") {
+      setInputFeedback({
+        type: "invalid",
+        message: `${nextCase.input_error} Expected: ${nextCase.expected_structure || "Drug - SIG (qty number)"}`,
+      });
       return;
     }
 
-    // Map API resolution to your UI format
-    const laneMap = {
-      "🔴 CHALLENGE": "CHALLENGE",
-      "🟠 CLARIFY USE": "CLARIFY USE",
-      "🟡 COMPLETE": "COMPLETE",
-      "🟢 NONE": "VERIFY AS ENTERED",
-    };
+    if (nextCase.input_status === "NORMALIZED") {
+      setInputFeedback({
+        type: "normalized",
+        message: `Normalized input: ${nextCase.normalized_input}`,
+      });
+    } else {
+      setInputFeedback({ type: "clean", message: "Input accepted as entered." });
+    }
 
-    const resolutionMap = {
-      "🔴 CHALLENGE": {
-        label: "CHALLENGE", emoji: "🔴",
-        bg: "bg-red-50", border: "border-red-300", text: "text-red-900"
-      },
-      "🟠 CLARIFY USE": {
-        label: "CLARIFY USE", emoji: "🟠",
-        bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-900"
-      },
-      "🟡 COMPLETE": {
-        label: "COMPLETE", emoji: "🟡",
-        bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-900"
-      },
-      "🟢 NONE": {
-        label: "NONE", emoji: "🟢",
-        bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-900"
-      },
-    };
-
-    const apiResolution = data.resolution || "🟢 NONE";
-    const mappedResolution = resolutionMap[apiResolution] || resolutionMap["🟢 NONE"];
-
-    const newCase = {
-      title: data.drug,
-      lane: laneMap[apiResolution] || "VERIFY AS ENTERED",
-      sig: data.sig,
-      qty: data.quantity,
-      structural: data.structural_issue,
-      affects: data.affects,
-      clarification: data.clarification,
-      resolution: mappedResolution,
-      refresh: data.refresh_points || [],
-      message: data.prescriber_message,
-      issue_line: data.issue_line || null,
-      why_this_matters: data.why_this_matters || null,
-      action_line: data.action_line || null,
-      documentation: data.documentation,
-      override_risk: data.override_risk,
-      risk_score: data.risk_score,
-      ui_priority: data.ui_priority,
-      drug_recognition_status: data.drug_recognition_status,
-      drug_recognition_match: data.drug_recognition_match,
-      known_pattern_message: data.known_pattern_message || null,
-      seen_before_context: data.seen_before_context || null,
-      history_summary: data.history_summary || null,
-      pattern_key: data.pattern_key || null,
-    };
-
-    const caseWithId = { ...newCase, id: `case-${Date.now()}` };
-    setCases((prev) => [...prev, caseWithId]);
-    setActiveCaseId(caseWithId.id);
-    setCaseStatuses((prev) => ({ ...prev, [caseWithId.id]: "active" }));
-    setSourceRefById((prev) => ({ ...prev, [caseWithId.id]: sourceRefInput }));
+    addCaseAndSelect(nextCase, sourceRefInput);
     setPrescriptionInput("");
     setSourceRefInput("");
-    setInputFeedback({ type: "clean", message: "Analysis complete." });
-    refreshAuditMeta();
+  };
 
-  } catch (err) {
-    setInputFeedback({
-      type: "invalid",
-      message: "Could not reach analysis server. Make sure the Python server is running on port 8000."
-    });
-  }
-};
+  const lanePriority = {
+    "HOLD NOW": 1,
+    "ADDRESS DURING WORKFLOW": 2,
+    "PENDING": 3,
+    "VERIFY": 4,
+    "RESOLVED": 5,
+  };
 
   const confidencePriority = {
     HIGH: 3,
@@ -1213,21 +1054,6 @@ function Pharmacy101ExtensionMockup() {
 
       return a.idx - b.idx;
     });
-  };
-
-  const lanePriority = {
-    "HOLD NOW": 1,
-    HOLD: 1,
-    CHALLENGE: 1,
-    "ADDRESS DURING WORKFLOW": 2,
-    ADDRESS: 2,
-    "CLARIFY USE": 2,
-    COMPLETE: 3,
-    VERIFY: 4,
-    "VERIFY AS ENTERED": 4,
-    NONE: 4,
-    PENDING: 5,
-    RESOLVED: 6,
   };
 
   const queueGroups = [
@@ -1272,7 +1098,7 @@ function Pharmacy101ExtensionMockup() {
       accent: "border-emerald-200 bg-emerald-50/30",
     },
   ]
-    .sort((a, b) => (lanePriority[a.title] ?? 999) - (lanePriority[b.title] ?? 999))
+    .sort((a, b) => (lanePriority[a.title] || 99) - (lanePriority[b.title] || 99))
     .map((group) => ({
       ...group,
       items: sortQueueItems(group.items, group.title),
@@ -1317,13 +1143,6 @@ function Pharmacy101ExtensionMockup() {
     setCaseStatuses((prev) => ({ ...prev, [caseId]: "resolved" }));
     setResolvedButtonById((prev) => ({ ...prev, [caseId]: true }));
     setActiveCaseId(caseId);
-  };
-
-  const formatSeenBeforeTimestamp = (isoValue) => {
-    if (!isoValue) return "Not available";
-    const d = new Date(isoValue);
-    if (Number.isNaN(d.getTime())) return "Not available";
-    return d.toLocaleString();
   };
 
   return (
@@ -1377,43 +1196,21 @@ function Pharmacy101ExtensionMockup() {
                 Extended Duration Mismatch
               </button>
             </div>
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={handleExportAuditLog}
-                disabled={isExportingAudit || auditCount <= 0}
-                className={`w-full rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
-                  isExportingAudit || auditCount <= 0
-                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
-                    : "border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100"
-                }`}
-              >
-                {isExportingAudit ? "Exporting..." : "Export Audit Log"}
-              </button>
-              {auditCount <= 0 && (
-                <div className="mt-1 text-[11px] text-slate-500">No analyses available to export yet.</div>
-              )}
-            </div>
           </div>
 
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3">
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-              Enter prescription
-            </label>
             <textarea
               value={prescriptionInput}
               onChange={(event) => setPrescriptionInput(event.target.value)}
-              placeholder="Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)"
+              placeholder="Paste full prescription (drug + sig + qty)"
               rows={3}
               className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
             />
-            <div className="mt-1 text-[11px] text-slate-500">Accepted examples: "Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)" or "valacyclovir 1 g take 1 tab q12h qty 28".</div>
-            <div className="mt-1 text-[11px] text-slate-500">Hyphen is optional. Quantity may be qty 28, quantity 28, or (qty 28). Extra spaces are okay.</div>
             <input
               type="text"
               value={sourceRefInput}
               onChange={(event) => setSourceRefInput(event.target.value)}
-              placeholder="Source Ref (e.g., eRx 284193, Order 771245) � optional"
+              placeholder="Source Ref (e.g., eRx 284193, Order 771245) ? optional"
               className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
             />
             <div className="mt-2 flex justify-end">
@@ -1436,11 +1233,6 @@ function Pharmacy101ExtensionMockup() {
                 {inputFeedback.message}
               </div>
             )}
-            {interpretedAsText && (
-              <div className="mt-2 text-xs text-slate-600">
-                <span className="font-semibold text-slate-700">Interpreted as:</span> {interpretedAsText}
-              </div>
-            )}
           </div>
 
           <div className="space-y-4">
@@ -1457,7 +1249,7 @@ function Pharmacy101ExtensionMockup() {
 
                   {group.items.map(({ item, idx, status }) => {
                     const isActive = item.id === active?.id;
-                    const statusLine = `${getLaneIcon(group.title)} ${group.title} → ${getShortActionPhrase(item, status, item.id)}`;
+                    const statusLine = `${getLaneIcon(group.title)} ${group.title} ? ${getShortActionPhrase(item, status, item.id)}`;
                     const itemSourceRef = sourceRefById[item.id];
                     const confidence = getConfidenceMeta(item, status);
                     return (
@@ -1503,23 +1295,34 @@ function Pharmacy101ExtensionMockup() {
           </div>
         </aside>
 
-        <main className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:flex lg:min-h-0 lg:flex-col lg:overflow-y-auto">
+        <main className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:flex lg:flex-col lg:overflow-hidden">
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             {(() => {
               const visibleHeader = getVisibleHeaderState(active, activeStatus);
+              const confidence = getConfidenceMeta(active, activeStatus);
               return (
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               <div className={`inline-flex rounded-xl border px-4 py-2 text-base font-bold ${visibleHeader.bg} ${visibleHeader.border} ${visibleHeader.text}`}>
                 {getLaneIcon(visibleHeader.label)} {visibleHeader.label}
               </div>
               <div className={`text-base font-bold uppercase tracking-wide ${visibleHeader.text}`}>
-                → {getShortActionPhrase(active, activeStatus, active?.id)}
+                ? {getShortActionPhrase(active, activeStatus, active?.id)}
               </div>
+              {confidence && (
+                <div
+                  className={`rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.1em] ${confidence.className}`}
+                  style={confidence.style}
+                >
+                  Confidence {confidence.level}
+                </div>
+              )}
             </div>
               );
             })()}
 
             <div className="mb-1 text-2xl font-semibold leading-tight">{active.title}</div>
+            {(() => { const d = getDisposition(active, activeStatus, active?.id); return d ? <div className={`mb-2 text-sm font-semibold ${d.color}`}>Disposition: {d.text}</div> : null; })()}
+            <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">{getDebugLaneSummary(active, activeStatus)}</div>
             {sourceRefById[active?.id] && (
               <div className="mb-3 text-xs font-medium text-slate-500">Source Ref: {sourceRefById[active?.id]}</div>
             )}
@@ -1532,22 +1335,6 @@ function Pharmacy101ExtensionMockup() {
                 )}
               </div>
             )}
-
-            <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
-              <div className="font-semibold uppercase tracking-[0.08em] text-slate-500">Seen Before</div>
-              {(() => {
-                const knownPattern = String(active?.known_pattern_message || "").trim();
-                const priorRxDisplay = String(active?.seen_before_context?.display || "").trim();
-
-                if (knownPattern) {
-                  return <div className="mt-1 text-sm font-semibold text-slate-800">Previously clarified on this prescription</div>;
-                }
-                if (priorRxDisplay) {
-                  return <div className="mt-1 text-sm font-semibold text-slate-800">{priorRxDisplay}</div>;
-                }
-                return <div className="mt-1 text-sm font-semibold text-slate-800">No prior history</div>;
-              })()}
-            </div>
 
             <div className="grid gap-2 text-sm sm:grid-cols-[1fr_auto]">
               <div className="rounded-xl bg-white p-3 text-slate-700">{active.sig}</div>
@@ -1576,8 +1363,8 @@ function Pharmacy101ExtensionMockup() {
                 className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
               >
                 {pendingButtonById[active?.id]
-                  ? "Pending"
-                  : "Send to Pending"}
+                  ? "Pending�"
+                  : "Mark Pending"}
               </button>
               <button
                 type="button"
@@ -1590,7 +1377,7 @@ function Pharmacy101ExtensionMockup() {
               </button>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">{getPrimaryMessage(active)}</div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">{active.message}</div>
 
             <textarea
               value={notesById[active?.id] || ""}
@@ -1609,28 +1396,11 @@ function Pharmacy101ExtensionMockup() {
           <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-xs font-medium text-slate-500">Quick Check</summary>
             <div className="mt-3 space-y-2">
-              {(() => {
-                const confidence = getConfidenceMeta(active, activeStatus);
-                if (!confidence) return null;
-                return (
-                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                    Confidence: <span className="font-semibold">{confidence.level}</span>
-                  </div>
-                );
-              })()}
-              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                {getDebugLaneSummary(active, activeStatus)}
-              </div>
               {active.refresh.map((line, idx) => (
                 <div key={idx} className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
                   {line}
                 </div>
               ))}
-              {active?.message && active.message !== "No message needed." && (
-                <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                  Full message: {active.message}
-                </div>
-              )}
               <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
                 Affects: <span className="font-semibold capitalize">{active.affects}</span> | Clarification: <span className="font-semibold">{active.clarification}</span>
               </div>
@@ -1647,3 +1417,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(<Pharmacy101Extensio
     </script>
   </body>
 </html>
+

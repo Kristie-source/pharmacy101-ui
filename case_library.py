@@ -46,6 +46,59 @@ KNOWN_DRUG_NAMES = [
     "acetaminophen",
     "apixaban",
     "rivaroxaban",
+    # Antibiotics
+    "amoxicillin", "augmentin", "azithromycin", "cephalexin", "ciprofloxacin",
+    "clindamycin", "doxycycline", "levofloxacin", "metronidazole", "nitrofurantoin",
+    "trimethoprim", "sulfamethoxazole", "cefdinir", "cefuroxime",
+    # Antivirals
+    "acyclovir", "valacyclovir", "famciclovir", "oseltamivir",
+    # Antifungals
+    "fluconazole", "nystatin",
+    # Cardiovascular
+    "amlodipine", "atenolol", "carvedilol", "lisinopril", "losartan",
+    "metoprolol", "metoprolol tartrate", "metoprolol succinate",
+    "valsartan", "irbesartan", "olmesartan", "hydrochlorothiazide",
+    "furosemide", "spironolactone", "digoxin", "warfarin",
+    "apixaban", "rivaroxaban", "clopidogrel",
+    # Cholesterol
+    "atorvastatin", "rosuvastatin", "simvastatin", "pravastatin",
+    # Diabetes
+    "metformin", "glipizide", "glimepiride", "sitagliptin",
+    "empagliflozin", "dapagliflozin", "insulin",
+    # Thyroid
+    "levothyroxine",
+    # GI
+    "omeprazole", "pantoprazole", "esomeprazole", "lansoprazole",
+    "ondansetron", "promethazine", "metoclopramide",
+    "docusate", "polyethylene glycol", "bisacodyl",
+    # Pain / Inflammation
+    "acetaminophen", "ibuprofen", "naproxen", "meloxicam",
+    "celecoxib", "diclofenac", "ketorolac", "tramadol",
+    "oxycodone", "hydrocodone", "morphine", "gabapentin", "pregabalin",
+    "cyclobenzaprine", "methocarbamol",
+    # Respiratory
+    "albuterol", "montelukast", "fluticasone", "budesonide",
+    "tiotropium", "ipratropium",
+    # Mental health
+    "sertraline", "escitalopram", "fluoxetine", "paroxetine",
+    "bupropion", "venlafaxine", "duloxetine", "mirtazapine",
+    "alprazolam", "lorazepam", "clonazepam", "diazepam",
+    "quetiapine", "aripiprazole", "risperidone", "olanzapine",
+    "lithium", "lamotrigine", "valproic acid",
+    # Sleep
+    "zolpidem", "trazodone", "melatonin",
+    # Migraine
+    "sumatriptan", "rizatriptan", "ubrelvy", "nurtec",
+    # Gout
+    "colchicine", "allopurinol", "febuxostat",
+    # Hormones
+    "estradiol", "progesterone", "testosterone", "prednisone",
+    "methylprednisolone", "dexamethasone", "hydrocortisone",
+    # Urological
+    "tamsulosin", "finasteride", "oxybutynin", "sildenafil", "tadalafil",
+    # Other common
+    "hydroxychloroquine", "azathioprine", "methotrexate",
+    "folic acid", "vitamin d", "ferrous sulfate",
 ]
 
 BRAND_ALIASES = {

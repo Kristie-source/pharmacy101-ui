@@ -12,7 +12,12 @@ def normalize_sig_shorthand(right_side: str) -> str:
 
     # Normalize quantity spellings to a single form used by the parser.
     normalized = re.sub(r"#\s*(\d+)\b", r"(qty \1)", normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r"(?<!\()\bqty\s*(\d+)\b(?!\))", r"(qty \1)", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(
+        r"(?<!\()\b(?:qty|quantity)\s*[:=]?\s*(\d+)\b(?!\))",
+        r"(qty \1)",
+        normalized,
+        flags=re.IGNORECASE,
+    )
 
     # Dose-form shorthand such as 1t / 2t / 1c / 2c.
     def _expand_dose_form(match: re.Match) -> str:
@@ -37,6 +42,8 @@ def normalize_sig_shorthand(right_side: str) -> str:
         (r"\bqid\b", "four times daily"),
         (r"\bqd\b", "daily"),
         (r"\bqod\b", "every other day"),
+        (r"\btab\b", "tablet"),
+        (r"\btabs\b", "tablets"),
     ]
     for pattern, replacement in token_replacements:
         normalized = re.sub(pattern, replacement, normalized, flags=re.IGNORECASE)
@@ -159,34 +166,55 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
     Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)
     """
 
-    text = raw_text.strip()
-
-    # Split into left side (drug/strength) and right side (sig + qty)
-    parts = text.split(" - ", 1)
-    if len(parts) != 2:
+    text = re.sub(r"\s+", " ", raw_text or "").strip()
+    if not text:
         raise ValueError(
-            "Input format not recognized. Use format like: "
+            "No prescription text found. Example: "
             "Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)"
         )
 
-    drug = parts[0].strip()
-    right_side = normalize_sig_shorthand(parts[1].strip())
+    normalized_text = normalize_sig_shorthand(text)
+
+    # Split into left side (drug/strength) and right side (sig + qty).
+    # Hyphen is preferred but optional if SIG starts with a known action verb.
+    split_match = re.match(r"^(?P<drug>.+?)\s*-\s*(?P<sig>.+)$", normalized_text)
+    if split_match:
+        drug = split_match.group("drug").strip()
+        right_side = split_match.group("sig").strip()
+    else:
+        sig_start = re.search(r"\b(take|use|apply|inhale|instill|inject)\b", normalized_text, flags=re.IGNORECASE)
+        if not sig_start:
+            raise ValueError(
+                "Could not find SIG directions. Add directions starting with take/use/apply/inhale/instill/inject. "
+                "Example: Valacyclovir 1 gm take 1 tablet by mouth every 12 hours qty 28"
+            )
+        drug = normalized_text[:sig_start.start()].strip(" -")
+        right_side = normalized_text[sig_start.start():].strip()
+
+    if not drug:
+        raise ValueError("Could not identify the drug segment before SIG directions.")
 
     # Extract quantity from normalized qty forms (qty 28), qty 28, or #28.
     qty_match = re.search(r"\(qty\s*(\d+)\)", right_side, re.IGNORECASE)
     if not qty_match:
-        raise ValueError("Could not find quantity. Use format like '(qty 28)'.")
+        raise ValueError(
+            "Could not find quantity. Include one of: '(qty 28)', 'qty 28', or 'quantity 28'."
+        )
 
     quantity = int(qty_match.group(1))
 
     # Remove the qty part from the sig
     sig = re.sub(r"\(qty\s*\d+\)", "", right_side, flags=re.IGNORECASE).strip()
+    sig = re.sub(r"\s+", " ", sig)
+
+    if not sig:
+        raise ValueError("SIG directions are missing after quantity removal.")
 
     unresolved = _find_unresolved_shorthand(sig)
     if unresolved:
         raise ValueError(
             f"Parsing incomplete: unresolved shorthand '{unresolved}' in SIG. "
-            "Please expand shorthand and try again."
+            "Please expand it (for example, 'qhs' -> 'nightly') and try again."
         )
     
     # Parse frequency from SIG

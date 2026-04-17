@@ -1,0 +1,180 @@
+{
+  "schema_version": "1.0",
+  "drugs": {
+    "valacyclovir": {
+      "generic_name": "valacyclovir",
+      "brand_names": ["Valtrex"],
+      "class": "antiviral",
+      "aliases": ["valacyclovir", "valtrex"],
+      "common_use_patterns": [
+        "scheduled short-course",
+        "episodic PRN use"
+      ],
+      "common_sig_structures": [
+        "take 1 tablet by mouth every 12 hours for N days",
+        "take 1 tablet by mouth as needed with explicit episode window"
+      ],
+      "known_ambiguity_flags": [
+        "prn combined with scheduled frequency",
+        "missing duration or stop point",
+        "quantity implies extended course"
+      ],
+      "high_risk_clarification_areas": [
+        "intended treatment window",
+        "episode trigger wording",
+        "maximum daily use when PRN"
+      ],
+      "structural_caution_notes": [
+        "Avoid mixing PRN and fixed cadence without boundary wording"
+      ]
+    },
+    "zolpidem": {
+      "generic_name": "zolpidem",
+      "brand_names": ["Ambien"],
+      "class": "sedative-hypnotic",
+      "aliases": ["zolpidem", "ambien"],
+      "common_use_patterns": [
+        "once nightly",
+        "short duration reassessment pattern"
+      ],
+      "common_sig_structures": [
+        "take 1 tablet by mouth at bedtime",
+        "take 1 tablet by mouth nightly as needed"
+      ],
+      "known_ambiguity_flags": [
+        "duplicate nightly plus prn phrasing",
+        "missing bedtime anchor"
+      ],
+      "high_risk_clarification_areas": [
+        "explicit bedtime timing",
+        "max nightly dose",
+        "ongoing vs intermittent use"
+      ],
+      "structural_caution_notes": [
+        "Prefer one clear nightly instruction path"
+      ]
+    },
+    "colchicine": {
+      "generic_name": "colchicine",
+      "brand_names": ["Colcrys", "Mitigare"],
+      "class": "anti-inflammatory gout therapy",
+      "aliases": ["colchicine", "colcrys", "mitigare"],
+      "common_use_patterns": [
+        "episodic flare regimen",
+        "daily prophylaxis"
+      ],
+      "common_sig_structures": [
+        "take X tablets then Y tablet after Z hours",
+        "take 1 tablet once daily"
+      ],
+      "known_ambiguity_flags": [
+        "flare sequence steps missing",
+        "prn mixed with daily cadence",
+        "missing max dose boundary"
+      ],
+      "high_risk_clarification_areas": [
+        "stepwise flare sequence",
+        "maximum tablets per episode/day",
+        "prophylaxis vs flare intent"
+      ],
+      "structural_caution_notes": [
+        "Flare regimens should include clear sequence and stop point"
+      ]
+    },
+    "ubrogepant": {
+      "generic_name": "ubrogepant",
+      "brand_names": ["Ubrelvy"],
+      "class": "CGRP receptor antagonist",
+      "aliases": ["ubrogepant", "ubrelvy"],
+      "common_use_patterns": [
+        "acute migraine episodic PRN"
+      ],
+      "common_sig_structures": [
+        "take 1 tablet as needed for migraine, may repeat after N hours"
+      ],
+      "known_ambiguity_flags": [
+        "prn without repeat interval",
+        "prn without maximum per 24 hours"
+      ],
+      "high_risk_clarification_areas": [
+        "repeat-dose interval",
+        "max tablets per 24 hours",
+        "episode trigger wording"
+      ],
+      "structural_caution_notes": [
+        "PRN wording should include repeat interval and max/day"
+      ]
+    },
+    "levothyroxine": {
+      "generic_name": "levothyroxine",
+      "brand_names": ["Synthroid", "Levoxyl", "Unithroid"],
+      "class": "thyroid hormone",
+      "aliases": ["levothyroxine", "synthroid", "levoxyl", "unithroid"],
+      "common_use_patterns": [
+        "daily chronic maintenance"
+      ],
+      "common_sig_structures": [
+        "take 1 tablet by mouth once daily"
+      ],
+      "known_ambiguity_flags": [
+        "non-daily schedule wording",
+        "alternating strengths without explicit day mapping"
+      ],
+      "high_risk_clarification_areas": [
+        "daily schedule consistency",
+        "day-to-strength mapping if alternating",
+        "quantity-duration alignment"
+      ],
+      "structural_caution_notes": [
+        "Prefer explicit day mapping when alternating strengths"
+      ]
+    },
+    "levofloxacin": {
+      "generic_name": "levofloxacin",
+      "brand_names": ["Levaquin"],
+      "class": "fluoroquinolone antibiotic",
+      "aliases": ["levofloxacin", "levaquin"],
+      "common_use_patterns": [
+        "scheduled short-course"
+      ],
+      "common_sig_structures": [
+        "take 1 tablet by mouth once daily for N days"
+      ],
+      "known_ambiguity_flags": [
+        "missing duration",
+        "quantity implies extended course"
+      ],
+      "high_risk_clarification_areas": [
+        "intended duration",
+        "start-stop boundary",
+        "course-length consistency with quantity"
+      ],
+      "structural_caution_notes": [
+        "Extended quantity should align with explicit duration"
+      ]
+    },
+    "lisinopril": {
+      "generic_name": "lisinopril",
+      "brand_names": ["Prinivil", "Zestril"],
+      "class": "ACE inhibitor",
+      "aliases": ["lisinopril", "prinivil", "zestril"],
+      "common_use_patterns": [
+        "daily chronic maintenance"
+      ],
+      "common_sig_structures": [
+        "take 1 tablet by mouth once daily"
+      ],
+      "known_ambiguity_flags": [
+        "non-daily cadence wording",
+        "duplicate schedule instructions"
+      ],
+      "high_risk_clarification_areas": [
+        "clear once-daily cadence",
+        "quantity-duration consistency"
+      ],
+      "structural_caution_notes": [
+        "Keep cadence explicit when additional PRN wording appears"
+      ]
+    }
+  }
+}

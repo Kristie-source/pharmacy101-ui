@@ -82,6 +82,9 @@ export default function Pharmacy101ExtensionMockup() {
   const [prescriptionInput, setPrescriptionInput] = React.useState("");
   const [sourceRefInput, setSourceRefInput] = React.useState("");
   const [inputFeedback, setInputFeedback] = React.useState(null);
+  const [interpretedAsText, setInterpretedAsText] = React.useState("");
+  const [auditCount, setAuditCount] = React.useState(0);
+  const [isExportingAudit, setIsExportingAudit] = React.useState(false);
   const [notesById, setNotesById] = React.useState({});
   const [sourceRefById, setSourceRefById] = React.useState({});
   const [pendingSubStatus, setPendingSubStatus] = React.useState({});
@@ -101,6 +104,49 @@ export default function Pharmacy101ExtensionMockup() {
       setActiveCaseId(cases[0].id);
     }
   }, [cases, activeCaseId]);
+
+  const refreshAuditMeta = React.useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:8000/audit/meta");
+      if (!response.ok) {
+        setAuditCount(0);
+        return;
+      }
+      const data = await response.json();
+      setAuditCount(Number(data?.total || 0));
+    } catch (err) {
+      setAuditCount(0);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refreshAuditMeta();
+  }, [refreshAuditMeta]);
+
+  const handleExportAuditLog = async () => {
+    if (isExportingAudit || auditCount <= 0) return;
+    setIsExportingAudit(true);
+    try {
+      const response = await fetch("http://localhost:8000/audit/export.csv");
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.href = downloadUrl;
+      link.download = `pharmacy101_audit_log_${stamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setInputFeedback({ type: "invalid", message: "Could not export audit log." });
+    } finally {
+      setIsExportingAudit(false);
+    }
+  };
 
   const HIGH_RISK_PRN_DRUGS = [
     "sumatriptan",
@@ -408,6 +454,23 @@ export default function Pharmacy101ExtensionMockup() {
         : "VERIFY";
 
     return `Fast Lane: ${fastLane} | Final Lane: ${finalLane}`;
+  };
+
+  const getPrimaryMessage = (item) => {
+    const issueLine = String(item?.issue_line || "").trim();
+    const actionLine = String(item?.action_line || "").trim();
+    const whyThisMatters = String(item?.why_this_matters || "").trim();
+
+    if (issueLine && actionLine) return `${issueLine}. ${actionLine}`;
+    if (actionLine) return actionLine;
+    if (issueLine) return issueLine;
+    if (whyThisMatters) return whyThisMatters;
+
+    const fullMessage = String(item?.message || "").trim();
+    if (!fullMessage || fullMessage === "No message needed.") return "No action needed.";
+
+    const firstSentence = fullMessage.split(/[.!?]/)[0].trim();
+    return firstSentence ? `${firstSentence}.` : fullMessage;
   };
 
   const getToneDotClass = (tone) => {
@@ -989,6 +1052,40 @@ export default function Pharmacy101ExtensionMockup() {
     };
   };
 
+  const buildInterpretedAsText = (nextCase) => {
+    if (!nextCase) return "";
+
+    const displayDrug = String(nextCase.title || "")
+      .toLowerCase()
+      .replace(/\b([0-9]+(?:\.[0-9]+)?)\s*gm\b/g, "$1 g")
+      .replace(/\b([0-9]+(?:\.[0-9]+)?)\s*ug\b/g, "$1 mcg")
+      .replace(/\b([0-9]+(?:\.[0-9]+)?)\s*(mg|mcg|g)\b/g, "$1 $2")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+      .map((token) => {
+        if (/^[0-9]+(?:\.[0-9]+)?$/.test(token)) return token;
+        if (/^(mg|mcg|g)$/.test(token)) return token;
+        return token.charAt(0).toUpperCase() + token.slice(1);
+      })
+      .join(" ");
+
+    const sig = String(nextCase.sig || "").toLowerCase();
+    const sigTokens = [];
+
+    if (/\b(four times daily|qid|every\s*6\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("QID");
+    else if (/\b(three times daily|tid|every\s*8\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("TID");
+    else if (/\b(twice daily|bid|every\s*12\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("BID");
+    else if (/\b(nightly|at bedtime|qhs)\b/.test(sig)) sigTokens.push("QHS");
+    else if (/\b(once daily|daily|qd|every\s*24\s*(h|hr|hour)s?)\b/.test(sig)) sigTokens.push("QD");
+
+    if (/\b(as needed|prn)\b/.test(sig)) sigTokens.push("PRN");
+    if (sigTokens.length === 0) sigTokens.push("Freq Unspecified");
+
+    const parts = [displayDrug, ...sigTokens, `Qty ${nextCase.qty}`].filter(Boolean);
+    return parts.join(" | ");
+  };
+
   const handleAnalyze = () => {
     const nextCase = buildCaseFromInput(prescriptionInput);
     if (!nextCase) return;
@@ -998,6 +1095,7 @@ export default function Pharmacy101ExtensionMockup() {
         type: "invalid",
         message: `${nextCase.input_error} Expected: ${nextCase.expected_structure || "Drug - SIG (qty number)"}`,
       });
+      setInterpretedAsText("");
       return;
     }
 
@@ -1009,6 +1107,8 @@ export default function Pharmacy101ExtensionMockup() {
     } else {
       setInputFeedback({ type: "clean", message: "Input accepted as entered." });
     }
+
+    setInterpretedAsText(buildInterpretedAsText(nextCase));
 
     addCaseAndSelect(nextCase, sourceRefInput);
     setPrescriptionInput("");
@@ -1137,6 +1237,13 @@ export default function Pharmacy101ExtensionMockup() {
     setActiveCaseId(caseId);
   };
 
+  const formatSeenBeforeTimestamp = (isoValue) => {
+    if (!isoValue) return "Not available";
+    const d = new Date(isoValue);
+    if (Number.isNaN(d.getTime())) return "Not available";
+    return d.toLocaleString();
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 md:p-6">
       <div className="mx-auto grid max-w-7xl gap-4 lg:h-[calc(100vh-3rem)] lg:grid-cols-[360px_1fr] lg:gap-6">
@@ -1188,16 +1295,38 @@ export default function Pharmacy101ExtensionMockup() {
                 Extended Duration Mismatch
               </button>
             </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={handleExportAuditLog}
+                disabled={isExportingAudit || auditCount <= 0}
+                className={`w-full rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${
+                  isExportingAudit || auditCount <= 0
+                    ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+                    : "border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {isExportingAudit ? "Exporting..." : "Export Audit Log"}
+              </button>
+              {auditCount <= 0 && (
+                <div className="mt-1 text-[11px] text-slate-500">No analyses available to export yet.</div>
+              )}
+            </div>
           </div>
 
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+              Enter prescription
+            </label>
             <textarea
               value={prescriptionInput}
               onChange={(event) => setPrescriptionInput(event.target.value)}
-              placeholder="Paste full prescription (drug + sig + qty)"
+              placeholder="Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)"
               rows={3}
               className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
             />
+            <div className="mt-1 text-[11px] text-slate-500">Accepted examples: "Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)" or "valacyclovir 1 g take 1 tab q12h qty 28".</div>
+            <div className="mt-1 text-[11px] text-slate-500">Hyphen is optional. Quantity may be qty 28, quantity 28, or (qty 28). Extra spaces are okay.</div>
             <input
               type="text"
               value={sourceRefInput}
@@ -1223,6 +1352,11 @@ export default function Pharmacy101ExtensionMockup() {
                     : "border-emerald-200 bg-emerald-50 text-emerald-700"
               }`}>
                 {inputFeedback.message}
+              </div>
+            )}
+            {interpretedAsText && (
+              <div className="mt-2 text-xs text-slate-600">
+                <span className="font-semibold text-slate-700">Interpreted as:</span> {interpretedAsText}
               </div>
             )}
           </div>
@@ -1288,11 +1422,10 @@ export default function Pharmacy101ExtensionMockup() {
           </div>
         </aside>
 
-        <main className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:flex lg:flex-col lg:overflow-hidden">
+        <main className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:flex lg:min-h-0 lg:flex-col lg:overflow-y-auto">
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             {(() => {
               const visibleHeader = getVisibleHeaderState(active, activeStatus);
-              const confidence = getConfidenceMeta(active, activeStatus);
               return (
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               <div className={`inline-flex rounded-xl border px-4 py-2 text-base font-bold ${visibleHeader.bg} ${visibleHeader.border} ${visibleHeader.text}`}>
@@ -1304,21 +1437,11 @@ export default function Pharmacy101ExtensionMockup() {
               <div className={`text-base font-bold uppercase tracking-wide ${visibleHeader.text}`}>
                 → {getShortActionPhrase(active, activeStatus, active?.id)}
               </div>
-              {confidence && (
-                <div
-                  className={`rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.1em] ${confidence.className}`}
-                  style={confidence.style}
-                >
-                  Confidence {confidence.level}
-                </div>
-              )}
             </div>
               );
             })()}
 
             <div className="mb-1 text-2xl font-semibold leading-tight">{active.title}</div>
-            {(() => { const d = getDisposition(active, activeStatus, active?.id); return d ? <div className={`mb-2 text-sm font-semibold ${d.color}`}>Disposition: {d.text}</div> : null; })()}
-            <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">{getDebugLaneSummary(active, activeStatus)}</div>
             {sourceRefById[active?.id] && (
               <div className="mb-3 text-xs font-medium text-slate-500">Source Ref: {sourceRefById[active?.id]}</div>
             )}
@@ -1331,6 +1454,22 @@ export default function Pharmacy101ExtensionMockup() {
                 )}
               </div>
             )}
+
+            <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
+              <div className="font-semibold uppercase tracking-[0.08em] text-slate-500">Seen Before</div>
+              {(() => {
+                const knownPattern = String(active?.known_pattern_message || "").trim();
+                const priorRxDisplay = String(active?.seen_before_context?.display || "").trim();
+
+                if (knownPattern) {
+                  return <div className="mt-1 text-sm font-semibold text-slate-800">Previously clarified on this prescription</div>;
+                }
+                if (priorRxDisplay) {
+                  return <div className="mt-1 text-sm font-semibold text-slate-800">{priorRxDisplay}</div>;
+                }
+                return <div className="mt-1 text-sm font-semibold text-slate-800">No prior history</div>;
+              })()}
+            </div>
 
             <div className="grid gap-2 text-sm sm:grid-cols-[1fr_auto]">
               <div className="rounded-xl bg-white p-3 text-slate-700">{active.sig}</div>
@@ -1359,8 +1498,8 @@ export default function Pharmacy101ExtensionMockup() {
                 className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
               >
                 {pendingButtonById[active?.id]
-                  ? "Pending…"
-                  : "Mark Pending"}
+                  ? "Pending"
+                  : "Send to Pending"}
               </button>
               <button
                 type="button"
@@ -1373,7 +1512,7 @@ export default function Pharmacy101ExtensionMockup() {
               </button>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">{active.message}</div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">{getPrimaryMessage(active)}</div>
 
             <textarea
               value={notesById[active?.id] || ""}
@@ -1392,11 +1531,28 @@ export default function Pharmacy101ExtensionMockup() {
           <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-xs font-medium text-slate-500">Quick Check</summary>
             <div className="mt-3 space-y-2">
+              {(() => {
+                const confidence = getConfidenceMeta(active, activeStatus);
+                if (!confidence) return null;
+                return (
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    Confidence: <span className="font-semibold">{confidence.level}</span>
+                  </div>
+                );
+              })()}
+              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                {getDebugLaneSummary(active, activeStatus)}
+              </div>
               {active.refresh.map((line, idx) => (
                 <div key={idx} className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
                   {line}
                 </div>
               ))}
+              {active?.message && active.message !== "No message needed." && (
+                <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                  Full message: {active.message}
+                </div>
+              )}
               <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
                 Affects: <span className="font-semibold capitalize">{active.affects}</span> | Clarification: <span className="font-semibold">{active.clarification}</span>
               </div>

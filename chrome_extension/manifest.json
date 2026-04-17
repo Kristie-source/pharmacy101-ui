@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Pharmacy101 Floating Panel",
+  "version": "0.1.0",
+  "description": "Floating Pharmacy101 analysis panel for PioneerRx pages.",
+  "permissions": ["storage"],
+  "host_permissions": ["http://localhost:8000/*"],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.pioneerrx.com/*",
+        "*://pioneerrx.com/*",
+        "https://kristie-source.github.io/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel.css"],
+      "matches": [
+        "*://*.pioneerrx.com/*",
+        "*://pioneerrx.com/*",
+        "https://kristie-source.github.io/*"
+      ]
+    }
+  ]
+}
