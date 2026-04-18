@@ -24,11 +24,11 @@ function Pharmacy101ExtensionMockup() {
       clarification: "Likely",
       resolution: { label: "CHALLENGE", emoji: "??", bg: "bg-red-50", border: "border-red-300", text: "text-red-900" },
       refresh: [
-        "Common pattern: Fluoroquinolone therapy is typically ordered for defined, short-course treatment windows.",
-        "Why this stands out: A 21-day supply at once daily implies a course length that warrants active confirmation.",
-        "Why quantity matters: Extended fluoroquinolone use carries safety considerations that make intended duration critical to confirm."
+        "Pattern focus: Fluoroquinolone therapy is typically ordered for defined, short-course treatment windows.",
+        "Why this matters: A 21-day supply at once daily may create a longer treatment duration than intended and carries cumulative safety considerations.",
+        "Next step: Confirm with the prescriber whether the intended treatment length is 21 days or a shorter course."
       ],
-      message: "Quantity implies a 21-day course. Please confirm whether that duration is intended, or whether a shorter course was planned.",
+      message: "Quantity implies a 21-day course, which may not align with a typical short-course duration for this medication. Please confirm the intended treatment length.",
     },
     {
       title: "Valacyclovir 1 gm",
@@ -40,11 +40,11 @@ function Pharmacy101ExtensionMockup() {
       clarification: "Likely",
       resolution: { label: "CHALLENGE", emoji: "??", bg: "bg-red-50", border: "border-red-300", text: "text-red-900" },
       refresh: [
-        "Common pattern: These orders commonly include a clearly defined treatment window.",
-        "Why this stands out: Quantity implies a course length that should be actively confirmed, not simply filled in.",
-        "Why quantity matters: Quantity drives total exposure and can create a longer course than intended."
+        "Pattern focus: These orders commonly include a clearly defined treatment window.",
+        "Why this matters: Quantity drives total exposure and may create a longer course than intended at the current directions.",
+        "Next step: Confirm with the prescriber whether the intended treatment length matches the implied 14-day course."
       ],
-      message: "Quantity implies a 14-day course at current directions. Please confirm whether that implied duration matches intended use.",
+      message: "Quantity implies a 14-day course at the current directions, which may not align with a typical short-course duration for this medication. Please confirm the intended treatment length.",
     },
     {
       title: "Ubrelvy 50 mg",
@@ -56,9 +56,9 @@ function Pharmacy101ExtensionMockup() {
       clarification: "Likely",
       resolution: { label: "CLARIFY USE", emoji: "??", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-900" },
       refresh: [
-        "Common pattern: This type of PRN therapy is often paired with a defined dosing limit.",
-        "Why this stands out: The instruction leaves the upper use boundary unstated.",
-        "Why quantity matters: Quantity does not define the maximum intended use in one day."
+        "Pattern focus: This type of PRN therapy is often paired with a defined dosing limit.",
+        "Why this matters: Quantity does not define the maximum intended use in one day, so the upper use boundary remains unclear.",
+        "Next step: Confirm the intended maximum daily dose with the prescriber."
       ],
       message: "PRN use is listed, but a maximum daily dose is not stated on the original order. Please clarify intended maximum.",
     },
@@ -72,7 +72,9 @@ function Pharmacy101ExtensionMockup() {
       clarification: "Unlikely",
       resolution: { label: "NONE", emoji: "??", bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-900" },
       refresh: [
-        "No pattern issue surfaced from the current structure.",
+        "Pattern focus: No blocking structural ambiguity was identified.",
+        "Why this matters: Directions are interpretable and do not require clarification before verification.",
+        "Next step: Verify as entered."
       ],
       message: "No message needed.",
     },
@@ -462,20 +464,9 @@ function Pharmacy101ExtensionMockup() {
   };
 
   const getPrimaryMessage = (item) => {
-    const issueLine = String(item?.issue_line || "").trim();
-    const actionLine = String(item?.action_line || "").trim();
-    const whyThisMatters = String(item?.why_this_matters || "").trim();
-
-    if (issueLine && actionLine) return `${issueLine}. ${actionLine}`;
-    if (actionLine) return actionLine;
-    if (issueLine) return issueLine;
-    if (whyThisMatters) return whyThisMatters;
-
     const fullMessage = String(item?.message || "").trim();
     if (!fullMessage || fullMessage === "No message needed.") return "No action needed.";
-
-    const firstSentence = fullMessage.split(/[.!?]/)[0].trim();
-    return firstSentence ? `${firstSentence}.` : fullMessage;
+    return fullMessage;
   };
 
   const getLaneIcon = (laneLabel) => {
@@ -532,7 +523,7 @@ function Pharmacy101ExtensionMockup() {
           "Why this matters: Longer courses carry cumulative safety considerations.",
           "Next step: Confirm with prescriber whether the extended quantity was intentional."
         ],
-        message: "Quantity implies an extended course duration. Please confirm whether this longer duration is intended for the patient.",
+        message: "Quantity and directions imply an extended course duration, which may not align with a typical short-course treatment window for this medication. Please confirm the intended treatment length.",
       },
       "scheduled-vs-prn-conflict": {
         title: "Pattern: Scheduled vs PRN Conflict",
@@ -583,7 +574,7 @@ function Pharmacy101ExtensionMockup() {
           "Why this matters: Misaligned quantities can create unintended treatment gaps or overages.",
           "Next step: Confirm the intended treatment duration matches the supplied quantity."
         ],
-        message: "Quantity does not clearly align with the stated or implied treatment duration. Please confirm the intended course length.",
+        message: "Quantity does not clearly align with the stated or implied treatment duration, which can create unintended over- or undertreatment. Please confirm the intended course length.",
       },
     };
     return templates[patternKey] || null;
@@ -765,7 +756,7 @@ function Pharmacy101ExtensionMockup() {
             "Pattern focus: confirm course length for complete duration structure.",
             "Next step: confirm course length during workflow."
           ],
-          message: "Confirm course length: duration wording should be explicit.",
+          message: "The written directions imply a treatment duration, but the course length is not explicit, which may lead to an unintended duration of therapy. Please confirm the intended course length.",
         };
       }
 
@@ -1223,56 +1214,113 @@ function Pharmacy101ExtensionMockup() {
     ADDRESS: 2,
     "CLARIFY USE": 2,
     COMPLETE: 3,
-    VERIFY: 4,
-    "VERIFY AS ENTERED": 4,
-    NONE: 4,
-    PENDING: 5,
+    PENDING: 4,
+    "VERIFIED — FOLLOW-UP PENDING": 5,
+    VERIFY: 5,
+    "VERIFY AS ENTERED": 5,
+    NONE: 5,
     RESOLVED: 6,
   };
 
-  const queueGroups = [
+  const isFullyClearVerified = (item) => {
+    if (!item) return false;
+
+    const lane = String(item.lane || "").toUpperCase();
+    const resolutionLabel = String(item?.resolution?.label || "").toUpperCase();
+    const affects = String(item.affects || "").toLowerCase();
+    const structural = String(item.structural || "").toLowerCase();
+    const message = String(item.message || "").toLowerCase();
+    const correctionNotes = Array.isArray(item.correction_notes) ? item.correction_notes : [];
+
+    const hasVerifyOrNoIssueSignal =
+      lane === "VERIFY AS ENTERED" ||
+      lane === "NONE" ||
+      resolutionLabel === "NONE" ||
+      resolutionLabel === "NO ISSUE";
+
+    const hasNoFollowUpSignal =
+      affects === "none" ||
+      structural.includes("no obvious structural issue") ||
+      structural.includes("no issue") ||
+      structural.includes("no blocking ambiguity") ||
+      message === "no message needed." ||
+      message === "no action needed." ||
+      message.includes("no follow-up needed") ||
+      message.includes("no follow up needed");
+
+    const hasUnresolvedCorrection = correctionNotes.length > 0;
+
+    return hasVerifyOrNoIssueSignal && hasNoFollowUpSignal && !hasUnresolvedCorrection;
+  };
+
+  const isVerifiedFollowUpPending = (item) => {
+    if (!item) return false;
+
+    const lane = String(item.lane || "").toUpperCase();
+    const resolutionLabel = String(item?.resolution?.label || "").toUpperCase();
+    const verifySignal =
+      lane === "VERIFY AS ENTERED" ||
+      lane === "NONE" ||
+      resolutionLabel === "NONE" ||
+      resolutionLabel === "NO ISSUE";
+
+    return verifySignal && !isFullyClearVerified(item);
+  };
+
+  const queueEntries = cases.map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }));
+
+  const workflowGroups = [
     {
       title: "HOLD NOW",
       tone: "red",
-      items: cases
-        .map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }))
+      items: queueEntries
         .filter((entry) => entry.status === "active" && entry.item.lane === "CHALLENGE"),
       accent: "border-red-200 bg-red-50/40",
     },
     {
       title: "ADDRESS DURING WORKFLOW",
       tone: "amber",
-      items: cases
-        .map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }))
+      items: queueEntries
         .filter((entry) => entry.status === "active" && ["CLARIFY USE", "COMPLETE"].includes(entry.item.lane)),
       accent: "border-amber-200 bg-amber-50/40",
     },
     {
-      title: "VERIFY",
-      tone: "green",
-      items: cases
-        .map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }))
-        .filter((entry) => entry.status === "active" && ["VERIFY AS ENTERED", "NONE"].includes(entry.item.lane)),
-      accent: "border-emerald-200 bg-emerald-50/30",
-    },
-    {
       title: "PENDING",
       tone: "yellow",
-      items: cases
-        .map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }))
+      items: queueEntries
         .filter((entry) => entry.status === "pending"),
       accent: "border-yellow-200 bg-yellow-50/40",
     },
     {
-      title: "RESOLVED",
+      title: "VERIFIED — FOLLOW-UP PENDING",
       tone: "green",
-      items: cases
-        .map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }))
-        .filter((entry) => entry.status === "resolved"),
+      items: queueEntries
+        .filter((entry) => entry.status === "active" && isVerifiedFollowUpPending(entry.item)),
       accent: "border-emerald-200 bg-emerald-50/30",
     },
   ]
     .sort((a, b) => (lanePriority[a.title] ?? 999) - (lanePriority[b.title] ?? 999))
+    .map((group) => ({
+      ...group,
+      items: sortQueueItems(group.items, group.title),
+    }));
+
+  const completedGroups = [
+    {
+      title: "VERIFIED / NO ISSUE",
+      tone: "green",
+      items: queueEntries
+        .filter((entry) => entry.status === "active" && isFullyClearVerified(entry.item)),
+      accent: "border-emerald-200 bg-emerald-50/30",
+    },
+    {
+      title: "RESOLVED",
+      tone: "green",
+      items: queueEntries
+        .filter((entry) => entry.status === "resolved"),
+      accent: "border-emerald-200 bg-emerald-50/30",
+    },
+  ]
     .map((group) => ({
       ...group,
       items: sortQueueItems(group.items, group.title),
@@ -1328,6 +1376,23 @@ function Pharmacy101ExtensionMockup() {
     setActiveCaseId(caseId);
   };
 
+  const markVerifiedFollowUpPending = () => {
+    const caseId = active?.id;
+    if (!caseId) return;
+    if (activeStatus !== "pending") return;
+    if (isFullyClearVerified(active)) return;
+
+    setCases((prev) => prev.map((item) => {
+      if (item.id !== caseId) return item;
+      return {
+        ...item,
+        lane: "VERIFY AS ENTERED",
+      };
+    }));
+    setCaseStatuses((prev) => ({ ...prev, [caseId]: "active" }));
+    setActiveCaseId(caseId);
+  };
+
   const formatSeenBeforeTimestamp = (isoValue) => {
     if (!isoValue) return "Not available";
     const d = new Date(isoValue);
@@ -1337,7 +1402,7 @@ function Pharmacy101ExtensionMockup() {
 
   return (
     <div className="min-h-screen bg-slate-100 p-4 font-sans text-slate-900 md:p-6">
-      <div className="mx-auto grid max-w-7xl gap-4 lg:h-[calc(100vh-3rem)] lg:grid-cols-[360px_1fr] lg:gap-6">
+      <div className="mx-auto grid max-w-[1400px] gap-4 lg:h-[calc(100vh-3rem)] lg:grid-cols-[340px_minmax(0,1fr)_340px] lg:gap-6">
         <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:overflow-auto">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -1347,43 +1412,40 @@ function Pharmacy101ExtensionMockup() {
             <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">Live Check</div>
           </div>
 
-          <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-3">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Quick Actions</div>
-            <div className="flex flex-wrap gap-2">
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3">
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
+              Enter prescription
+            </label>
+            <textarea
+              value={prescriptionInput}
+              onChange={(event) => setPrescriptionInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  if (prescriptionInput.trim()) {
+                    handleAnalyze();
+                  }
+                }
+              }}
+              placeholder="Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)"
+              rows={3}
+              className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            />
+
+            <input
+              type="text"
+              value={sourceRefInput}
+              onChange={(event) => setSourceRefInput(event.target.value)}
+              placeholder="Rx Identifier (e.g., Rx #284193, Order 771245) � optional"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+            />
+            <div className="mt-2 flex justify-end">
               <button
                 type="button"
-                onClick={() => loadQuickAction("missing-max-dose")}
-                className="rounded-lg border border-yellow-200 bg-yellow-50 px-2.5 py-1 text-xs font-semibold text-yellow-900 hover:bg-yellow-100"
+                onClick={handleAnalyze}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
               >
-                Missing Max Dose
-              </button>
-              <button
-                type="button"
-                onClick={() => loadQuickAction("prn-use-unclear")}
-                className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-              >
-                PRN Use Unclear
-              </button>
-              <button
-                type="button"
-                onClick={() => loadQuickAction("duration-quantity-mismatch")}
-                className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-900 hover:bg-red-100"
-              >
-                Duration Quantity Mismatch
-              </button>
-              <button
-                type="button"
-                onClick={() => loadQuickAction("scheduled-vs-prn-conflict")}
-                className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-              >
-                Scheduled vs PRN Conflict
-              </button>
-              <button
-                type="button"
-                onClick={() => loadQuickAction("extended-duration-mismatch")}
-                className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-900 hover:bg-red-100"
-              >
-                Extended Duration Mismatch
+                Analyze
               </button>
             </div>
             <div className="mt-3">
@@ -1402,37 +1464,6 @@ function Pharmacy101ExtensionMockup() {
               {auditCount <= 0 && (
                 <div className="mt-1 text-[11px] text-slate-500">No analyses available to export yet.</div>
               )}
-            </div>
-          </div>
-
-          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3">
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">
-              Enter prescription
-            </label>
-            <textarea
-              value={prescriptionInput}
-              onChange={(event) => setPrescriptionInput(event.target.value)}
-              placeholder="Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)"
-              rows={3}
-              className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-            />
-            <div className="mt-1 text-[11px] text-slate-500">Accepted examples: "Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)" or "valacyclovir 1 g take 1 tab q12h qty 28".</div>
-            <div className="mt-1 text-[11px] text-slate-500">Hyphen is optional. Quantity may be qty 28, quantity 28, or (qty 28). Extra spaces are okay.</div>
-            <input
-              type="text"
-              value={sourceRefInput}
-              onChange={(event) => setSourceRefInput(event.target.value)}
-              placeholder="Source Ref (e.g., eRx 284193, Order 771245) � optional"
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-            />
-            <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={handleAnalyze}
-                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
-              >
-                Analyze
-              </button>
             </div>
             {inputFeedback && (
               <div className={`mt-2 rounded-lg border px-2 py-1 text-xs ${
@@ -1453,7 +1484,7 @@ function Pharmacy101ExtensionMockup() {
           </div>
 
           <div className="space-y-4">
-            {queueGroups.map((group) => (
+            {workflowGroups.map((group) => (
               <section key={group.title} className={`rounded-2xl border p-3 ${group.accent}`}>
                 <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">
                   {getLaneIcon(group.title)} {group.title}
@@ -1570,6 +1601,15 @@ function Pharmacy101ExtensionMockup() {
 
           <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
+              {activeStatus === "pending" && !isFullyClearVerified(active) && (
+                <button
+                  type="button"
+                  onClick={markVerifiedFollowUpPending}
+                  className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
+                >
+                  Mark Verified - Follow-Up Pending
+                </button>
+              )}
               <button
                 type="button"
                 onClick={markResolved}
@@ -1621,34 +1661,94 @@ function Pharmacy101ExtensionMockup() {
           <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-xs font-medium text-slate-500">Quick Check</summary>
             <div className="mt-3 space-y-2">
-              {(() => {
-                const confidence = getConfidenceMeta(active, activeStatus);
-                if (!confidence) return null;
-                return (
-                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                    Confidence: <span className="font-semibold">{confidence.level}</span>
+              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                Affects: <span className="font-semibold capitalize">{active.affects}</span>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                Clarification: <span className="font-semibold">{active.clarification}</span>
+              </div>
+              {[
+                active.refresh.find((line) => line.startsWith("Pattern focus:")),
+                active.refresh.find((line) => line.startsWith("Why this matters:")) || active.refresh.find((line) => line.startsWith("Why this stands out:")),
+                active.refresh.find((line) => line.startsWith("Next step:")),
+              ]
+                .filter(Boolean)
+                .map((line, idx) => (
+                  <div key={idx} className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                    {line}
                   </div>
-                );
-              })()}
-              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                {getDebugLaneSummary(active, activeStatus)}
-              </div>
-              {active.refresh.map((line, idx) => (
-                <div key={idx} className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-                  {line}
-                </div>
-              ))}
-              {active?.message && active.message !== "No message needed." && (
-                <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                  Full message: {active.message}
-                </div>
-              )}
-              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                Affects: <span className="font-semibold capitalize">{active.affects}</span> | Clarification: <span className="font-semibold">{active.clarification}</span>
-              </div>
+                ))}
             </div>
           </details>
         </main>
+
+        <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:overflow-auto">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Completed</div>
+              <h2 className="text-xl font-semibold">Cleared Cases</h2>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {completedGroups.map((group) => (
+              <section key={group.title} className={`rounded-2xl border p-3 ${group.accent}`}>
+                <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">
+                  {getLaneIcon(group.title)} {group.title}
+                </h2>
+
+                <div className="space-y-2">
+                  {group.items.length === 0 && (
+                    <div className="rounded-xl bg-white/70 p-3 text-xs text-slate-500">No Items</div>
+                  )}
+
+                  {group.items.map(({ item, idx, status }) => {
+                    const isActive = item.id === active?.id;
+                    const statusLine = `${getLaneIcon(group.title)} ${group.title} → ${getShortActionPhrase(item, status, item.id)}`;
+                    const itemSourceRef = sourceRefById[item.id];
+                    const confidence = getConfidenceMeta(item, status);
+                    return (
+                      <button
+                        type="button"
+                        key={`${item.title}-${idx}`}
+                        onClick={() => setActiveCaseId(item.id)}
+                        className={`w-full rounded-xl border p-3 text-left transition ${
+                          isActive
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className={`text-xs font-semibold ${isActive ? "text-slate-200" : "text-slate-600"}`}>
+                            {statusLine}
+                          </div>
+                          {confidence && (
+                            <div
+                              className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${isActive ? "border-slate-600 bg-slate-800 text-slate-200 font-semibold" : confidence.className}`}
+                              style={!isActive ? confidence.style : undefined}
+                            >
+                              {confidence.level}
+                            </div>
+                          )}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold">{getQueueDrugName(item)}</div>
+                        <div className={`mt-1 line-clamp-1 text-xs ${isActive ? "text-slate-300" : "text-slate-500"}`}>
+                          {item.sig}
+                        </div>
+                        <div className={`mt-1 text-xs ${isActive ? "text-slate-300" : "text-slate-500"}`}>Qty {item.qty}</div>
+                        {itemSourceRef && (
+                          <div className={`mt-1 text-xs font-medium ${isActive ? "text-slate-300" : "text-slate-600"}`}>
+                            Source Ref: {itemSourceRef}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        </aside>
       </div>
     </div>
   );
@@ -1659,3 +1759,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(<Pharmacy101Extensio
     </script>
   </body>
 </html>
+
