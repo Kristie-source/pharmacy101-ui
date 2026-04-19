@@ -284,6 +284,14 @@ function Pharmacy101ExtensionMockup() {
       return "Resolved";
     }
 
+    if (
+      status === "active" &&
+      String(item?.lane || "").toUpperCase() === "VERIFY AS ENTERED" &&
+      !isFullyClearVerified(item)
+    ) {
+      return "Verified - follow-up pending";
+    }
+
     const structural = (item?.structural || "").toLowerCase();
 
     if (item.lane === "CHALLENGE") {
@@ -380,6 +388,20 @@ function Pharmacy101ExtensionMockup() {
       };
     }
 
+    if (
+      status === "active" &&
+      String(item?.lane || "").toUpperCase() === "VERIFY AS ENTERED" &&
+      !isFullyClearVerified(item)
+    ) {
+      return {
+        label: "VERIFIED — FOLLOW-UP PENDING",
+        tone: "blue",
+        bg: "bg-sky-50",
+        border: "border-sky-300",
+        text: "text-sky-900",
+      };
+    }
+
     const queueSignal = getQueueSignal(item);
     return {
       label: queueSignal.label,
@@ -469,6 +491,47 @@ function Pharmacy101ExtensionMockup() {
     return fullMessage;
   };
 
+  const getPrescriberDirectAsk = (item, status = "active") => {
+    if (!item) return "Please confirm how you would like this prescription to be dispensed.";
+    if (status === "resolved") {
+      return "Please review and advise only if additional changes are needed.";
+    }
+
+    const structural = String(item?.structural || "").toLowerCase();
+    const lane = String(item?.lane || "").toUpperCase();
+
+    if (structural.includes("max") && structural.includes("dose")) {
+      return "Please confirm the intended maximum dose per day for this prescription.";
+    }
+    if (structural.includes("duration") || structural.includes("course") || structural.includes("extended")) {
+      return "Please confirm the intended treatment duration and total course length.";
+    }
+    if (structural.includes("schedule") || structural.includes("interval") || structural.includes("timing")) {
+      return "Please confirm the intended administration schedule and dosing interval.";
+    }
+    if (structural.includes("prn") || structural.includes("as needed") || structural.includes("use")) {
+      return "Please confirm the intended PRN use boundaries, including when to use and maximum daily use.";
+    }
+    if (lane === "CHALLENGE") {
+      return "Please confirm the intended directions so we can safely proceed with dispensing.";
+    }
+    if (lane === "CLARIFY USE" || lane === "COMPLETE") {
+      return "Please clarify the intended use instructions so the label directions are complete.";
+    }
+
+    return "Please confirm these directions are accurate as written.";
+  };
+
+  const buildReadyToSendMessage = (item, status = "active") => {
+    if (!item) return "";
+
+    const concern = getPrimaryMessage(item);
+    if (!concern || concern === "No action needed.") {
+      return "No prescriber clarification needed.";
+    }
+    return concern;
+  };
+
   const getFirstSentence = (value) => {
     const text = String(value || "").trim();
     if (!text) return "";
@@ -541,6 +604,7 @@ function Pharmacy101ExtensionMockup() {
       "HOLD NOW": "🔴",
       "ADDRESS DURING WORKFLOW": "🟠",
       "VERIFY": "🟢",
+      "VERIFIED — FOLLOW-UP PENDING": "🔵",
       "PENDING": "🟡",
       "RESOLVED": "🟢",
     };
@@ -1325,13 +1389,24 @@ function Pharmacy101ExtensionMockup() {
 
     const lane = String(item.lane || "").toUpperCase();
     const resolutionLabel = String(item?.resolution?.label || "").toUpperCase();
-    const verifySignal =
-      lane === "VERIFY AS ENTERED" ||
-      lane === "NONE" ||
-      resolutionLabel === "NONE" ||
-      resolutionLabel === "NO ISSUE";
+    const affects = String(item.affects || "").toLowerCase();
+    const message = String(item.message || "").toLowerCase();
+    const correctionNotes = Array.isArray(item.correction_notes) ? item.correction_notes : [];
 
-    return verifySignal && !isFullyClearVerified(item);
+    // This group is only for verified cases that still need follow-up, never pure "no issue" cases.
+    const verifiedSignal = lane === "VERIFY AS ENTERED";
+    const noIssueSignal = lane === "NONE" || resolutionLabel === "NONE" || resolutionLabel === "NO ISSUE";
+    const hasOutstandingFollowUp =
+      correctionNotes.length > 0 ||
+      affects !== "none" ||
+      !(
+        message === "no message needed." ||
+        message === "no action needed." ||
+        message.includes("no follow-up needed") ||
+        message.includes("no follow up needed")
+      );
+
+    return verifiedSignal && !noIssueSignal && hasOutstandingFollowUp && !isFullyClearVerified(item);
   };
 
   const queueEntries = cases.map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }));
@@ -1360,10 +1435,10 @@ function Pharmacy101ExtensionMockup() {
     },
     {
       title: "VERIFIED — FOLLOW-UP PENDING",
-      tone: "green",
+      tone: "blue",
       items: queueEntries
         .filter((entry) => entry.status === "active" && isVerifiedFollowUpPending(entry.item)),
-      accent: "border-emerald-200 bg-emerald-50/30",
+      accent: "border-sky-200 bg-sky-50/40",
     },
   ]
     .sort((a, b) => (lanePriority[a.title] ?? 999) - (lanePriority[b.title] ?? 999))
@@ -1398,9 +1473,29 @@ function Pharmacy101ExtensionMockup() {
   const [pendingSavingById, setPendingSavingById] = React.useState({});
   const [resolvedButtonById, setResolvedButtonById] = React.useState({});
 
+  const readyToSendMessage = active
+    ? buildReadyToSendMessage(active, activeStatus)
+    : "";
+
+  const isHoldOrAddressCase = (() => {
+    if (!active) return false;
+    if (activeStatus === "pending") {
+      const pendingOrigin = pendingOriginById[active?.id];
+      if (pendingOrigin?.lane === "HOLD" || pendingOrigin?.lane === "ADDRESS") return true;
+    }
+    const headerLabel = getVisibleHeaderState(active, activeStatus).label;
+    return headerLabel === "HOLD NOW" || headerLabel === "ADDRESS DURING WORKFLOW";
+  })();
+
+  const isActiveClarificationCase = (() => {
+    if (!active || activeStatus !== "active") return false;
+    const headerLabel = getVisibleHeaderState(active, activeStatus).label;
+    return headerLabel === "HOLD NOW" || headerLabel === "ADDRESS DURING WORKFLOW";
+  })();
+
   const copyMessage = async () => {
     if (!navigator.clipboard) return;
-    await navigator.clipboard.writeText(active.message);
+    await navigator.clipboard.writeText(readyToSendMessage);
     const caseId = active?.id;
     if (!caseId) return;
     setCopiedById((prev) => ({ ...prev, [caseId]: true }));
@@ -1564,7 +1659,9 @@ function Pharmacy101ExtensionMockup() {
 
                   {group.items.map(({ item, idx, status }) => {
                     const isActive = item.id === active?.id;
-                    const statusLine = `${getLaneIcon(group.title)} ${group.title} → ${getShortActionPhrase(item, status, item.id)}`;
+                    const statusSubtitle = group.title === "VERIFIED — FOLLOW-UP PENDING"
+                      ? "Verified — follow-up still required"
+                      : `${getLaneIcon(group.title)} ${group.title} → ${getShortActionPhrase(item, status, item.id)}`;
                     const itemSourceRef = sourceRefById[item.id];
                     const confidence = getConfidenceMeta(item, status);
                     return (
@@ -1573,14 +1670,18 @@ function Pharmacy101ExtensionMockup() {
                         key={`${item.title}-${idx}`}
                         onClick={() => setActiveCaseId(item.id)}
                         className={`w-full rounded-xl border p-3 text-left transition ${
-                          isActive
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : "border-slate-200 bg-white hover:border-slate-300"
+                          group.title === "VERIFIED — FOLLOW-UP PENDING"
+                            ? isActive
+                              ? "border-sky-700 bg-sky-700 text-white"
+                              : "border-sky-200 bg-sky-50/60 text-sky-900 hover:border-sky-300"
+                            : isActive
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "border-slate-200 bg-white hover:border-slate-300"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <div className={`text-xs font-semibold ${isActive ? "text-slate-200" : "text-slate-600"}`}>
-                            {statusLine}
+                          <div className={`text-xs font-semibold ${isActive ? "text-slate-200" : group.title === "VERIFIED — FOLLOW-UP PENDING" ? "text-sky-700" : "text-slate-600"}`}>
+                            {statusSubtitle}
                           </div>
                           {confidence && (
                             <div
@@ -1640,21 +1741,22 @@ function Pharmacy101ExtensionMockup() {
               </div>
             )}
 
-            <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
-              <div className="font-semibold uppercase tracking-[0.08em] text-slate-500">Seen Before</div>
-              {(() => {
-                const knownPattern = String(active?.known_pattern_message || "").trim();
-                const priorRxDisplay = String(active?.seen_before_context?.display || "").trim();
+            {(() => {
+              const knownPattern = String(active?.known_pattern_message || "").trim();
+              const priorRxDisplay = String(active?.seen_before_context?.display || "").trim();
+              const hasHistoryContext = Boolean(knownPattern || priorRxDisplay);
 
-                if (knownPattern) {
-                  return <div className="mt-1 text-sm font-semibold text-slate-800">Previously clarified on this prescription</div>;
-                }
-                if (priorRxDisplay) {
-                  return <div className="mt-1 text-sm font-semibold text-slate-800">{priorRxDisplay}</div>;
-                }
-                return <div className="mt-1 text-sm font-semibold text-slate-800">No prior history</div>;
-              })()}
-            </div>
+              if (!hasHistoryContext) return null;
+
+              return (
+                <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs text-slate-600">
+                  <span className="font-semibold uppercase tracking-[0.08em] text-slate-500">History:</span>{" "}
+                  {knownPattern
+                    ? "Previously clarified on this prescription"
+                    : priorRxDisplay}
+                </div>
+              );
+            })()}
 
             <div className="grid gap-2 text-sm sm:grid-cols-[1fr_auto]">
               <div className="rounded-xl bg-white p-3 text-slate-700">{active.sig}</div>
@@ -1662,23 +1764,15 @@ function Pharmacy101ExtensionMockup() {
             </div>
 
             <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Decision</div>
-              <div className="mt-1 text-sm font-semibold text-slate-900">
-                {getPrimaryActionInstruction(active, activeStatus, active?.id)}
-              </div>
-              <div className="mt-1 text-sm text-slate-600">{getSupportingContextLine(active)}</div>
-            </div>
-
-            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Quick Rationale</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Clinical Check</div>
               {(() => {
                 const rationale = getQuickRationale(active);
                 return (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                    <li><span className="font-semibold text-slate-900">Typical:</span> {rationale.typical}</li>
-                    <li><span className="font-semibold text-slate-900">Deviation:</span> {rationale.deviation}</li>
-                    <li><span className="font-semibold text-slate-900">Risk:</span> {rationale.risk}</li>
-                  </ul>
+                  <div className="mt-2 space-y-1 text-sm text-slate-700">
+                    <div><span className="font-semibold text-slate-900">Pattern:</span> {getFirstSentence(rationale.typical)}</div>
+                    <div><span className="font-semibold text-slate-900">Deviation:</span> {getFirstSentence(rationale.deviation)}</div>
+                    <div><span className="font-semibold text-slate-900">Risk:</span> {getFirstSentence(rationale.risk)}</div>
+                  </div>
                 );
               })()}
             </div>
@@ -1692,22 +1786,17 @@ function Pharmacy101ExtensionMockup() {
                   onClick={markVerifiedFollowUpPending}
                   className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
                 >
-                  Mark Verified - Follow-Up Pending
+                  Verify with follow-up
                 </button>
               )}
               <button
                 type="button"
-                onClick={markResolved}
-                className="rounded-xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow hover:bg-slate-700 active:bg-slate-800 transition-colors"
-              >
-                {resolvedButtonById[active?.id]
-                  ? "Resolved"
-                  : "Mark Resolved"}
-              </button>
-              <button
-                type="button"
                 onClick={copyMessage}
-                className="rounded-xl border border-slate-300 bg-white px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+                className={`rounded-xl px-5 py-2 text-sm font-semibold transition-colors ${
+                  isActiveClarificationCase || isHoldOrAddressCase
+                    ? "bg-slate-900 text-white shadow hover:bg-slate-700 active:bg-slate-800"
+                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                }`}
               >
                 {copiedById[active?.id]
                   ? "Copied"
@@ -1715,9 +1804,26 @@ function Pharmacy101ExtensionMockup() {
               </button>
               <button
                 type="button"
+                onClick={markResolved}
+                className={`rounded-xl px-5 py-2 text-sm font-semibold transition-colors ${
+                  isActiveClarificationCase
+                    ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                    : "bg-slate-900 text-white shadow hover:bg-slate-700 active:bg-slate-800"
+                }`}
+              >
+                {resolvedButtonById[active?.id]
+                  ? "Resolved"
+                  : "Mark Resolved"}
+              </button>
+              <button
+                type="button"
                 onClick={markAsPending}
                 disabled={Boolean(pendingSavingById[active?.id])}
-                className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-70"
+                className={`rounded-xl px-5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                  isActiveClarificationCase
+                    ? "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
+                    : "border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                }`}
               >
                 {pendingSavingById[active?.id]
                   ? "Saving..."
@@ -1728,6 +1834,18 @@ function Pharmacy101ExtensionMockup() {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">{getPrimaryActionInstruction(active, activeStatus, active?.id)}</div>
+
+            <div className="mt-3">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Ready-to-Send Message
+              </label>
+              <textarea
+                value={readyToSendMessage}
+                readOnly
+                rows={9}
+                className="w-full resize-y overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700 focus:border-slate-400 focus:outline-none"
+              />
+            </div>
 
             <textarea
               value={notesById[active?.id] || ""}
@@ -1745,21 +1863,56 @@ function Pharmacy101ExtensionMockup() {
 
           <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
             <summary className="cursor-pointer text-xs font-medium text-slate-500">Expanded Detail</summary>
-            <div className="mt-3 space-y-2">
-              <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                Affects: <span className="font-semibold capitalize">{active.affects}</span>
-              </div>
-              {Array.isArray(active.refresh) && active.refresh.map((line, idx) => (
-                <div key={idx} className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-                  {line}
+            {(() => {
+              const parsedInput = String(active?.normalized_input || `${active?.title || ""} | ${active?.sig || ""} | Qty ${active?.qty ?? ""}`).trim();
+              const rxIdentifier = String(sourceRefById[active?.id] || "").trim() || "Not provided";
+              const structuralIssue = String(active?.structural || "").trim() || "None";
+              const internalMessage = String(active?.issue_line || "").trim() || "Not provided";
+
+              const documentation = typeof active?.documentation === "string"
+                ? active.documentation.trim()
+                : active?.documentation
+                  ? JSON.stringify(active.documentation, null, 2)
+                  : "Not provided";
+
+              const seenBefore = active?.seen_before_context;
+              const seenBeforeContext = seenBefore
+                ? String(seenBefore?.display || seenBefore?.context || seenBefore?.summary || JSON.stringify(seenBefore, null, 2))
+                : "No prior context";
+
+              const knownPatternMessage = String(active?.known_pattern_message || "").trim();
+              const historyMatchType = knownPatternMessage
+                ? "Known pattern match"
+                : seenBefore
+                  ? String(seenBefore?.match_type || seenBefore?.type || "Seen-before match")
+                  : "No match";
+
+              return (
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-700">Parsed input:</span> <span className="whitespace-pre-wrap">{parsedInput}</span>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-700">Rx Identifier:</span> {rxIdentifier}
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-700">Structural issue:</span> <span className="whitespace-pre-wrap">{structuralIssue}</span>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-700">Documentation:</span> <span className="whitespace-pre-wrap">{documentation}</span>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-700">Internal message:</span> <span className="whitespace-pre-wrap">{internalMessage}</span>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-700">History match type:</span> {historyMatchType}
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+                    <span className="font-semibold text-slate-700">Seen-before context:</span> <span className="whitespace-pre-wrap">{seenBeforeContext}</span>
+                  </div>
                 </div>
-              ))}
-              {active?.message && active.message !== "No message needed." && (
-                <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                  Full message: {active.message}
-                </div>
-              )}
-            </div>
+              );
+            })()}
           </details>
         </main>
 
