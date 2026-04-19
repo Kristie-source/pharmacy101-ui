@@ -8,6 +8,11 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+      .clinical-toggle-caret { display: inline; }
+      details[open] > summary .clinical-toggle-caret-closed { display: none; }
+      details:not([open]) > summary .clinical-toggle-caret-open { display: none; }
+    </style>
   </head>
   <body class="bg-slate-100">
     <div id="root"></div>
@@ -104,6 +109,7 @@ function Pharmacy101ExtensionMockup() {
   const [pendingSubStatus, setPendingSubStatus] = React.useState({});
   const [pendingOriginById, setPendingOriginById] = React.useState({});
   const [pendingMovedAtById, setPendingMovedAtById] = React.useState({});
+  const readyToSendMessageRef = React.useRef(null);
   const active = cases.find((item) => item.id === activeCaseId) || cases[0] || null;
   const activeStatus = caseStatuses[active?.id] || "active";
 
@@ -313,6 +319,18 @@ function Pharmacy101ExtensionMockup() {
     return "Verify as entered";
   };
 
+  const getPendingInstructionLine = (item, status = "active", caseId = null) => {
+    if (status !== "pending") return "";
+
+    const pendingOrigin = pendingOriginById[caseId];
+    const isTrueHold =
+      pendingOrigin?.lane === "HOLD" ||
+      String(item?.lane || "").toUpperCase() === "CHALLENGE";
+
+    if (isTrueHold) return "Awaiting MD response — do not dispense";
+    return "Verify with follow-up pending";
+  };
+
   const getDisposition = (item, status, caseId = null) => {
     if (status === "pending") {
       const pendingOrigin = caseId ? pendingOriginById[caseId] : null;
@@ -394,7 +412,7 @@ function Pharmacy101ExtensionMockup() {
       !isFullyClearVerified(item)
     ) {
       return {
-        label: "VERIFIED — FOLLOW-UP PENDING",
+        label: "VERIFIED/ISSUE",
         tone: "blue",
         bg: "bg-sky-50",
         border: "border-sky-300",
@@ -599,12 +617,34 @@ function Pharmacy101ExtensionMockup() {
     return { typical, deviation, risk };
   };
 
+  const shouldShowIndicationPrompt = (item, status = "active") => {
+    if (!item || status === "resolved") return false;
+
+    const lane = String(item?.lane || "").toUpperCase();
+    const affects = String(item?.affects || "").toLowerCase();
+    const structural = String(item?.structural || "").toLowerCase();
+
+    const indicationSensitiveStructure =
+      structural.includes("duration") ||
+      structural.includes("course") ||
+      structural.includes("prn") ||
+      structural.includes("as needed") ||
+      structural.includes("window") ||
+      structural.includes("episode") ||
+      structural.includes("use pattern");
+
+    return (
+      ["CHALLENGE", "CLARIFY USE", "COMPLETE"].includes(lane) &&
+      (affects === "duration" || affects === "instructions" || indicationSensitiveStructure)
+    );
+  };
+
   const getLaneIcon = (laneLabel) => {
     const iconMap = {
       "HOLD NOW": "🔴",
       "ADDRESS DURING WORKFLOW": "🟠",
       "VERIFY": "🟢",
-      "VERIFIED — FOLLOW-UP PENDING": "🔵",
+      "VERIFIED/ISSUE": "🔵",
       "PENDING": "🟡",
       "RESOLVED": "🟢",
     };
@@ -1346,7 +1386,7 @@ function Pharmacy101ExtensionMockup() {
     "CLARIFY USE": 2,
     COMPLETE: 3,
     PENDING: 4,
-    "VERIFIED — FOLLOW-UP PENDING": 5,
+    "VERIFIED/ISSUE": 5,
     VERIFY: 5,
     "VERIFY AS ENTERED": 5,
     NONE: 5,
@@ -1434,11 +1474,11 @@ function Pharmacy101ExtensionMockup() {
       accent: "border-yellow-200 bg-yellow-50/40",
     },
     {
-      title: "VERIFIED — FOLLOW-UP PENDING",
+      title: "VERIFIED/ISSUE",
       tone: "blue",
       items: queueEntries
         .filter((entry) => entry.status === "active" && isVerifiedFollowUpPending(entry.item)),
-      accent: "border-sky-200 bg-sky-50/40",
+      accent: "border-sky-100 bg-sky-50/20",
     },
   ]
     .sort((a, b) => (lanePriority[a.title] ?? 999) - (lanePriority[b.title] ?? 999))
@@ -1472,10 +1512,19 @@ function Pharmacy101ExtensionMockup() {
   const [pendingButtonById, setPendingButtonById] = React.useState({});
   const [pendingSavingById, setPendingSavingById] = React.useState({});
   const [resolvedButtonById, setResolvedButtonById] = React.useState({});
+  const [actionFlashByKey, setActionFlashByKey] = React.useState({});
 
   const readyToSendMessage = active
     ? buildReadyToSendMessage(active, activeStatus)
     : "";
+
+  React.useEffect(() => {
+    const textArea = readyToSendMessageRef.current;
+    if (!textArea) return;
+
+    textArea.style.height = "auto";
+    textArea.style.height = `${textArea.scrollHeight}px`;
+  }, [active?.id, readyToSendMessage]);
 
   const isHoldOrAddressCase = (() => {
     if (!active) return false;
@@ -1493,11 +1542,25 @@ function Pharmacy101ExtensionMockup() {
     return headerLabel === "HOLD NOW" || headerLabel === "ADDRESS DURING WORKFLOW";
   })();
 
+  const triggerActionFlash = (caseId, action, durationMs = 450) => {
+    if (!caseId) return;
+    const flashKey = `${caseId}:${action}`;
+    setActionFlashByKey((prev) => ({ ...prev, [flashKey]: true }));
+    setTimeout(() => {
+      setActionFlashByKey((prev) => ({ ...prev, [flashKey]: false }));
+    }, durationMs);
+  };
+
+  const isActionFlashing = (caseId, action) => Boolean(actionFlashByKey[`${caseId}:${action}`]);
+  const actionButtonBaseClass = "rounded-xl px-5 py-2 text-sm font-semibold cursor-pointer transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-sm disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed disabled:opacity-60";
+  const actionButtonFlashClass = "bg-slate-900 text-white shadow hover:bg-slate-800 active:bg-slate-800";
+
   const copyMessage = async () => {
-    if (!navigator.clipboard) return;
-    await navigator.clipboard.writeText(readyToSendMessage);
     const caseId = active?.id;
     if (!caseId) return;
+    triggerActionFlash(caseId, "copy");
+    if (!navigator.clipboard) return;
+    await navigator.clipboard.writeText(readyToSendMessage);
     setCopiedById((prev) => ({ ...prev, [caseId]: true }));
     setTimeout(() => {
       setCopiedById((prev) => ({ ...prev, [caseId]: false }));
@@ -1508,6 +1571,7 @@ function Pharmacy101ExtensionMockup() {
     const caseId = active?.id;
     if (!caseId) return;
     if (pendingSavingById[caseId]) return;
+    triggerActionFlash(caseId, "pending");
     setPendingSavingById((prev) => ({ ...prev, [caseId]: true }));
 
     const pendingOriginMeta = getPendingOriginMeta(active);
@@ -1533,6 +1597,7 @@ function Pharmacy101ExtensionMockup() {
   const markResolved = () => {
     const caseId = active?.id;
     if (!caseId) return;
+    triggerActionFlash(caseId, "resolved");
     setCaseStatuses((prev) => ({ ...prev, [caseId]: "resolved" }));
     setResolvedButtonById((prev) => ({ ...prev, [caseId]: true }));
     setActiveCaseId(caseId);
@@ -1543,6 +1608,7 @@ function Pharmacy101ExtensionMockup() {
     if (!caseId) return;
     if (activeStatus !== "pending") return;
     if (isFullyClearVerified(active)) return;
+    triggerActionFlash(caseId, "verify-follow-up");
 
     setCases((prev) => prev.map((item) => {
       if (item.id !== caseId) return item;
@@ -1659,39 +1725,36 @@ function Pharmacy101ExtensionMockup() {
 
                   {group.items.map(({ item, idx, status }) => {
                     const isActive = item.id === active?.id;
-                    const statusSubtitle = group.title === "VERIFIED — FOLLOW-UP PENDING"
-                      ? "Verified — follow-up still required"
-                      : `${getLaneIcon(group.title)} ${group.title} → ${getShortActionPhrase(item, status, item.id)}`;
+                    const statusSubtitle = group.title === "VERIFIED/ISSUE"
+                      ? "VERIFIED/ISSUE → Follow-up required"
+                      : status === "pending"
+                        ? `${getLaneIcon(group.title)} ${group.title}`
+                        : `${getLaneIcon(group.title)} ${group.title} → ${getShortActionPhrase(item, status, item.id)}`;
+                    const pendingInstruction = getPendingInstructionLine(item, status, item.id);
                     const itemSourceRef = sourceRefById[item.id];
-                    const confidence = getConfidenceMeta(item, status);
                     return (
                       <button
                         type="button"
                         key={`${item.title}-${idx}`}
                         onClick={() => setActiveCaseId(item.id)}
                         className={`w-full rounded-xl border p-3 text-left transition ${
-                          group.title === "VERIFIED — FOLLOW-UP PENDING"
+                          group.title === "VERIFIED/ISSUE"
                             ? isActive
-                              ? "border-sky-700 bg-sky-700 text-white"
-                              : "border-sky-200 bg-sky-50/60 text-sky-900 hover:border-sky-300"
+                              ? "border-sky-400 bg-sky-100/70 text-sky-900"
+                              : "border-sky-200 bg-white text-sky-800 hover:border-sky-300 hover:bg-sky-50/40"
                             : isActive
                               ? "border-slate-900 bg-slate-900 text-white"
                               : "border-slate-200 bg-white hover:border-slate-300"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className={`text-xs font-semibold ${isActive ? "text-slate-200" : group.title === "VERIFIED — FOLLOW-UP PENDING" ? "text-sky-700" : "text-slate-600"}`}>
-                            {statusSubtitle}
-                          </div>
-                          {confidence && (
-                            <div
-                              className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${isActive ? "border-slate-600 bg-slate-800 text-slate-200 font-semibold" : confidence.className}`}
-                              style={!isActive ? confidence.style : undefined}
-                            >
-                              {confidence.level}
-                            </div>
-                          )}
+                        <div className={`text-xs font-semibold ${isActive ? (group.title === "VERIFIED/ISSUE" ? "text-sky-800" : "text-slate-200") : group.title === "VERIFIED/ISSUE" ? "text-sky-700" : "text-slate-600"}`}>
+                          {statusSubtitle}
                         </div>
+                        {status === "pending" && pendingInstruction && (
+                          <div className={`mt-1 text-[11px] font-semibold ${isActive ? "text-slate-300" : "text-slate-700"}`}>
+                            {pendingInstruction}
+                          </div>
+                        )}
                         <div className="mt-1 text-sm font-semibold">{getQueueDrugName(item)}</div>
                         <div className={`mt-1 line-clamp-1 text-xs ${isActive ? "text-slate-300" : "text-slate-500"}`}>
                           {item.sig}
@@ -1715,13 +1778,18 @@ function Pharmacy101ExtensionMockup() {
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             {(() => {
               const visibleHeader = getVisibleHeaderState(active, activeStatus);
+              const isVerifiedFollowUpHeader = visibleHeader.label === "VERIFIED/ISSUE";
+              const headerLabelText = visibleHeader.label;
+              const headerSupportText = isVerifiedFollowUpHeader
+                ? "→ Follow-up required"
+                : `→ ${getShortActionPhrase(active, activeStatus, active?.id)}`;
               return (
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               <div className={`inline-flex rounded-xl border px-4 py-2 text-base font-bold ${visibleHeader.bg} ${visibleHeader.border} ${visibleHeader.text}`}>
-                {getLaneIcon(visibleHeader.label)} {visibleHeader.label}
+                {getLaneIcon(visibleHeader.label)} {headerLabelText}
               </div>
               <div className={`text-base font-bold uppercase tracking-wide ${visibleHeader.text}`}>
-                → {getShortActionPhrase(active, activeStatus, active?.id)}
+                {headerSupportText}
               </div>
             </div>
               );
@@ -1763,19 +1831,36 @@ function Pharmacy101ExtensionMockup() {
               <div className="rounded-xl bg-white p-3 font-semibold text-slate-700">Qty {active.qty}</div>
             </div>
 
-            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Clinical Check</div>
-              {(() => {
+            {shouldShowIndicationPrompt(active, activeStatus) && (
+              <div className="mt-2 text-xs text-slate-600">Indication may help clarify this case.</div>
+            )}
+
+            {(() => {
                 const rationale = getQuickRationale(active);
+                const summaryText = getFirstSentence(rationale.deviation) || "Deviation from typical pattern";
+
                 return (
-                  <div className="mt-2 space-y-1 text-sm text-slate-700">
-                    <div><span className="font-semibold text-slate-900">Pattern:</span> {getFirstSentence(rationale.typical)}</div>
-                    <div><span className="font-semibold text-slate-900">Deviation:</span> {getFirstSentence(rationale.deviation)}</div>
-                    <div><span className="font-semibold text-slate-900">Risk:</span> {getFirstSentence(rationale.risk)}</div>
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                    <details>
+                      <summary className="cursor-pointer list-none marker:content-['']">
+                        <div className="flex items-start gap-2">
+                          <span className="clinical-toggle-caret clinical-toggle-caret-closed mt-0.5 text-base font-bold leading-none text-slate-800">▶</span>
+                          <span className="clinical-toggle-caret clinical-toggle-caret-open mt-0.5 text-base font-bold leading-none text-slate-800">▼</span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Clinical Check</span>
+                            <span className="mt-1 block text-sm text-slate-700">{summaryText}</span>
+                          </div>
+                        </div>
+                      </summary>
+                      <div className="mt-2 space-y-1 text-sm text-slate-700">
+                        <div><span className="font-semibold text-slate-900">Pattern:</span> {getFirstSentence(rationale.typical)}</div>
+                        <div><span className="font-semibold text-slate-900">Deviation:</span> {getFirstSentence(rationale.deviation)}</div>
+                        <div><span className="font-semibold text-slate-900">Risk:</span> {getFirstSentence(rationale.risk)}</div>
+                      </div>
+                    </details>
                   </div>
                 );
               })()}
-            </div>
           </section>
 
           <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1784,18 +1869,22 @@ function Pharmacy101ExtensionMockup() {
                 <button
                   type="button"
                   onClick={markVerifiedFollowUpPending}
-                  className="rounded-xl border border-emerald-300 bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100"
+                  className={`${actionButtonBaseClass} ${
+                    isActionFlashing(active?.id, "verify-follow-up")
+                      ? actionButtonFlashClass
+                      : "border border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-100"
+                  }`}
                 >
-                  Verify with follow-up
+                  Verified — Needs Follow-up
                 </button>
               )}
               <button
                 type="button"
                 onClick={copyMessage}
-                className={`rounded-xl px-5 py-2 text-sm font-semibold transition-colors ${
-                  isActiveClarificationCase || isHoldOrAddressCase
-                    ? "bg-slate-900 text-white shadow hover:bg-slate-700 active:bg-slate-800"
-                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                className={`${actionButtonBaseClass} ${
+                  isActionFlashing(active?.id, "copy")
+                    ? actionButtonFlashClass
+                    : "border border-indigo-300 bg-indigo-50 text-indigo-950 hover:bg-indigo-100"
                 }`}
               >
                 {copiedById[active?.id]
@@ -1805,10 +1894,10 @@ function Pharmacy101ExtensionMockup() {
               <button
                 type="button"
                 onClick={markResolved}
-                className={`rounded-xl px-5 py-2 text-sm font-semibold transition-colors ${
-                  isActiveClarificationCase
-                    ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                    : "bg-slate-900 text-white shadow hover:bg-slate-700 active:bg-slate-800"
+                className={`${actionButtonBaseClass} ${
+                  isActionFlashing(active?.id, "resolved")
+                    ? actionButtonFlashClass
+                    : "border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
                 }`}
               >
                 {resolvedButtonById[active?.id]
@@ -1819,9 +1908,9 @@ function Pharmacy101ExtensionMockup() {
                 type="button"
                 onClick={markAsPending}
                 disabled={Boolean(pendingSavingById[active?.id])}
-                className={`rounded-xl px-5 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
-                  isActiveClarificationCase
-                    ? "border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
+                className={`${actionButtonBaseClass} ${
+                  isActionFlashing(active?.id, "pending")
+                    ? actionButtonFlashClass
                     : "border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
                 }`}
               >
@@ -1840,25 +1929,32 @@ function Pharmacy101ExtensionMockup() {
                 Ready-to-Send Message
               </label>
               <textarea
+                ref={readyToSendMessageRef}
                 value={readyToSendMessage}
                 readOnly
-                rows={9}
-                className="w-full resize-y overflow-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700 focus:border-slate-400 focus:outline-none"
+                rows={1}
+                className="w-full resize-none overflow-hidden whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700 focus:border-slate-400 focus:outline-none"
               />
             </div>
 
-            <textarea
-              value={notesById[active?.id] || ""}
-              onChange={(event) =>
-                setNotesById((prev) => ({
-                  ...prev,
-                  [active?.id]: event.target.value,
-                }))
-              }
-              placeholder="Add note (optional)"
-              rows={2}
-              className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
-            />
+            <div className="mt-3">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Handoff Note
+              </label>
+              <div className="mb-2 text-xs text-slate-500">Use for handoff notes or actions already taken.</div>
+              <textarea
+                value={notesById[active?.id] || ""}
+                onChange={(event) =>
+                  setNotesById((prev) => ({
+                    ...prev,
+                    [active?.id]: event.target.value,
+                  }))
+                }
+                placeholder="e.g., Left VM for MD at 3:15 PM; Patient reports long-term use"
+                rows={2}
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
+              />
+            </div>
           </section>
 
           <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
@@ -1940,7 +2036,6 @@ function Pharmacy101ExtensionMockup() {
                     const isActive = item.id === active?.id;
                     const statusLine = `${getLaneIcon(group.title)} ${group.title} → ${getShortActionPhrase(item, status, item.id)}`;
                     const itemSourceRef = sourceRefById[item.id];
-                    const confidence = getConfidenceMeta(item, status);
                     return (
                       <button
                         type="button"
@@ -1952,18 +2047,8 @@ function Pharmacy101ExtensionMockup() {
                             : "border-slate-200 bg-white hover:border-slate-300"
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className={`text-xs font-semibold ${isActive ? "text-slate-200" : "text-slate-600"}`}>
-                            {statusLine}
-                          </div>
-                          {confidence && (
-                            <div
-                              className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${isActive ? "border-slate-600 bg-slate-800 text-slate-200 font-semibold" : confidence.className}`}
-                              style={!isActive ? confidence.style : undefined}
-                            >
-                              {confidence.level}
-                            </div>
-                          )}
+                        <div className={`text-xs font-semibold ${isActive ? "text-slate-200" : "text-slate-600"}`}>
+                          {statusLine}
                         </div>
                         <div className="mt-1 text-sm font-semibold">{getQueueDrugName(item)}</div>
                         <div className={`mt-1 line-clamp-1 text-xs ${isActive ? "text-slate-300" : "text-slate-500"}`}>
