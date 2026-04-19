@@ -117,6 +117,13 @@ def get_ui_priority(risk_score: int) -> str:
 
 
 def get_override_risk(structural: object, drug: str, sig: str, parsed: object) -> str:
+    # Scope guardrail: contextual risk wording is secondary only.
+    # If there is no structural ambiguity trigger, we intentionally return
+    # no-risk text to avoid DUR-style alerting drift and alert fatigue.
+    lane = _lane_token(structural.resolution)
+    if lane == "NONE" or str(structural.affects).lower() == "none":
+        return "No significant risk from proceeding."
+
     drug_lower = drug.lower()
     sig_lower = sig.lower()
     if "ubrelvy" in drug_lower and "as needed" in sig_lower:

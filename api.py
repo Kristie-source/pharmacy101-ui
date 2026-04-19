@@ -87,6 +87,25 @@ def _derive_confidence(risk_score: int | None) -> str:
         return "MEDIUM"
     return "LOW"
 
+
+def _has_structural_trigger(structural: object) -> bool:
+    """
+    Scope validator for Pharmacy101:
+    - Cases must originate from structural ambiguity in prescription instructions.
+    - Context may refine severity/risk but cannot independently trigger a case.
+    """
+    lane = str(getattr(structural, "resolution", "") or "").upper()
+    affects = str(getattr(structural, "affects", "") or "").lower()
+    issue_text = str(getattr(structural, "structural_issue", "") or "").lower()
+
+    if "NONE" in lane:
+        return False
+    if affects not in {"instructions", "duration", "frequency"}:
+        return False
+    if not issue_text or issue_text.startswith("no obvious structural issue"):
+        return False
+    return True
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -126,6 +145,17 @@ def analyze(input: PrescriptionInput):
     structural = detect_structural_issue(
         parsed.drug, parsed.sig, parsed.quantity, parsed.frequency
     )
+    has_structural_trigger = _has_structural_trigger(structural)
+
+    # Intentional product boundary:
+    # If no structural ambiguity is detected, classify as No Issue and do not
+    # escalate from context/history signals to avoid duplicating DUR alerting.
+    if not has_structural_trigger:
+        structural.structural_issue = "No obvious structural issue detected."
+        structural.affects = "none"
+        structural.clarification = "Unlikely"
+        structural.resolution = "🟢 NONE"
+
     safe_to_verify = get_safe_to_verify(structural)
     follow_up_need = get_follow_up_need(structural)
     severity = get_severity(structural)
@@ -183,7 +213,7 @@ def analyze(input: PrescriptionInput):
     result["analysis_id"] = analysis_id
     result["history_summary"] = get_history_summary_by_pattern_key(pattern_key, analysis_id)
 
-    issue_type = ui_helpers.normalize_issue_type(structural.structural_issue)
+    issue_type = ui_helpers.normalize_issue_type(structural.structural_issue) if has_structural_trigger else ""
 
     rx_id_check = validate_rx_instance_id(input.rx_instance_id)
     rx_instance_id_valid = rx_id_check["valid"]
@@ -203,7 +233,7 @@ def analyze(input: PrescriptionInput):
         qty=parsed.quantity,
     )
 
-    lane = "NONE" if str(structural.resolution).upper() == "NONE" else "INTERRUPTIVE"
+    lane = "INTERRUPTIVE" if has_structural_trigger else "NONE"
     history_match_type = "NONE"
     history_match_confidence = "NONE"
     seen_before_context = None

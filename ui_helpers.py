@@ -114,10 +114,18 @@ ISSUE_COPY = {
 def normalize_issue_type(raw_issue_text: str) -> str:
     """
     Map free-text structural issue text to internal UI issue codes.
+
+        Scope note:
+        - Only structural ambiguity text should map to an actionable issue code.
+        - Non-structural or no-issue text must return empty to prevent DUR-style
+            escalation in this product surface.
     """
     text = str(raw_issue_text or "").strip()
     if not text:
         return ""
+
+        if text.lower().startswith("no obvious structural issue"):
+                return ""
 
     upper_text = text.upper()
     if upper_text in ISSUE_COPY:

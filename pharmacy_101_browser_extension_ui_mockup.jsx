@@ -473,6 +473,73 @@ export default function Pharmacy101ExtensionMockup() {
     return firstSentence ? `${firstSentence}.` : fullMessage;
   };
 
+  const getFirstSentence = (value) => {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    const match = text.match(/^(.+?[.!?])(?:\s|$)/);
+    return (match ? match[1] : text).trim();
+  };
+
+  const stripReasonPrefix = (value) => {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    return text
+      .replace(/^Step\s*\d+[^:]*:\s*/i, "")
+      .replace(/^(Pattern focus|Common pattern|Why this matters|Why this stands out|Next step):\s*/i, "")
+      .trim();
+  };
+
+  const getRefreshLineByPrefix = (item, prefixes = []) => {
+    const lines = Array.isArray(item?.refresh) ? item.refresh : [];
+    const normalizedPrefixes = prefixes.map((p) => String(p || "").toLowerCase());
+    const match = lines.find((line) => {
+      const lower = String(line || "").toLowerCase();
+      return normalizedPrefixes.some((prefix) => lower.startsWith(prefix));
+    });
+    return stripReasonPrefix(match || "");
+  };
+
+  const getPrimaryActionInstruction = (item, status = "active", caseId = null) => {
+    const laneLabel = getVisibleHeaderState(item, status).label;
+    if (status === "pending") return pendingSubStatus[caseId] || "Awaiting prescriber response before next step.";
+    if (status === "resolved") return "Action completed. Continue workflow based on resolved direction.";
+    if (laneLabel === "HOLD NOW") return "Confirm intended duration/use details with prescriber before dispensing.";
+    if (laneLabel === "ADDRESS DURING WORKFLOW") return "Clarify missing use boundaries during workflow and document response.";
+    return "Verify as entered and continue standard dispensing workflow.";
+  };
+
+  const getSupportingContextLine = (item) => {
+    const issueLine = String(item?.issue_line || "").trim();
+    if (issueLine) return getFirstSentence(issueLine);
+    const structural = String(item?.structural || "").trim();
+    if (structural) return getFirstSentence(structural);
+    return "No structural discrepancy detected.";
+  };
+
+  const getQuickRationale = (item) => {
+    const isVerifyLane = ["VERIFY AS ENTERED", "NONE"].includes(String(item?.lane || "").toUpperCase());
+
+    const typical = getRefreshLineByPrefix(item, ["pattern focus:", "common pattern:"]) ||
+      (isVerifyLane
+        ? "Directions are followable and structurally complete for routine verification."
+        : "Expected pattern includes clear boundaries for dose, duration, and use triggers.");
+
+    const deviation = getRefreshLineByPrefix(item, ["why this stands out:"]) ||
+      getFirstSentence(String(item?.issue_line || "").trim()) ||
+      getFirstSentence(String(item?.structural || "").trim()) ||
+      (isVerifyLane
+        ? "No meaningful deviation detected in the entered directions."
+        : "Current directions leave a key use boundary unclear.");
+
+    const risk = getRefreshLineByPrefix(item, ["why this matters:"]) ||
+      getFirstSentence(String(item?.override_risk || "").trim()) ||
+      (isVerifyLane
+        ? "Low immediate risk when verified as entered."
+        : "Unclear intent can lead to incorrect duration or unsafe total exposure.");
+
+    return { typical, deviation, risk };
+  };
+
   const getToneDotClass = (tone) => {
     if (tone === "red") return "bg-red-500";
     if (tone === "amber") return "bg-amber-500";
@@ -1485,9 +1552,27 @@ export default function Pharmacy101ExtensionMockup() {
               <div className="rounded-xl bg-white p-3 font-semibold text-slate-700">Qty {active.qty}</div>
             </div>
 
-            <div className="mt-3 rounded-xl bg-white p-3 text-base font-bold text-slate-900">{active.structural}</div>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Decision</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">
+                {getPrimaryActionInstruction(active, activeStatus, active?.id)}
+              </div>
+              <div className="mt-1 text-sm text-slate-600">{getSupportingContextLine(active)}</div>
+            </div>
 
-            <div className="mt-2 text-xs font-medium text-slate-400">Ready to Send</div>
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Quick Rationale</div>
+              {(() => {
+                const rationale = getQuickRationale(active);
+                return (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                    <li><span className="font-semibold text-slate-900">Typical:</span> {rationale.typical}</li>
+                    <li><span className="font-semibold text-slate-900">Deviation:</span> {rationale.deviation}</li>
+                    <li><span className="font-semibold text-slate-900">Risk:</span> {rationale.risk}</li>
+                  </ul>
+                );
+              })()}
+            </div>
           </section>
 
           <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1524,7 +1609,7 @@ export default function Pharmacy101ExtensionMockup() {
               </button>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm leading-6 text-slate-700">{getPrimaryMessage(active)}</div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">{getPrimaryActionInstruction(active, activeStatus, active?.id)}</div>
 
             <textarea
               value={notesById[active?.id] || ""}
@@ -1541,7 +1626,7 @@ export default function Pharmacy101ExtensionMockup() {
           </section>
 
           <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-            <summary className="cursor-pointer text-xs font-medium text-slate-500">Quick Check</summary>
+            <summary className="cursor-pointer text-xs font-medium text-slate-500">Expanded Detail</summary>
             <div className="mt-3 space-y-2">
               {(() => {
                 const confidence = getConfidenceMeta(active, activeStatus);
@@ -1566,7 +1651,7 @@ export default function Pharmacy101ExtensionMockup() {
                 </div>
               )}
               <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                Affects: <span className="font-semibold capitalize">{active.affects}</span> | Clarification: <span className="font-semibold">{active.clarification}</span>
+                Affects: <span className="font-semibold capitalize">{active.affects}</span>
               </div>
             </div>
           </details>
