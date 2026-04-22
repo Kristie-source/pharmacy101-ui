@@ -264,6 +264,7 @@ export default function Pharmacy101ExtensionMockup() {
   };
 
   const getActionText = (item) => {
+    if (item?.pattern_assessment === "Pattern-questionable") return "Clarify Intended Use";
     if (item.lane === "CHALLENGE") return "Clarify Duration";
     if (item.lane === "CLARIFY USE") return "Clarify Patient Use";
     if (item.lane === "COMPLETE") return "Complete Missing Detail";
@@ -279,7 +280,14 @@ export default function Pharmacy101ExtensionMockup() {
 
     const structural = (item?.structural || "").toLowerCase();
 
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return "Clarify intended use";
+    }
+
     if (item.lane === "CHALLENGE") {
+      if (structural.includes("total dose") || structural.includes("strength") || structural.includes("dose/strength")) {
+        return "Clarify total dose";
+      }
       if (structural.includes("max") && structural.includes("dose")) return "Clarify max dose";
       if (structural.includes("course") || structural.includes("duration") || structural.includes("extended")) {
         return "Confirm course length";
@@ -310,6 +318,9 @@ export default function Pharmacy101ExtensionMockup() {
       return null;
     }
     if (status === "resolved") return null;
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return { text: "Can verify, but follow-up on intended use is recommended", color: "text-amber-700" };
+    }
     if (item.lane === "CHALLENGE") return { text: "Do not dispense until clarified", color: "text-red-700" };
     if (["CLARIFY USE", "COMPLETE"].includes(item.lane)) {
       return { text: "Can dispense, but clarification recommended", color: "text-amber-700" };
@@ -319,6 +330,15 @@ export default function Pharmacy101ExtensionMockup() {
 
   const getPendingOriginMeta = (item) => {
     if (!item) return null;
+
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return {
+        lane: "VERIFY",
+        subStatus: "Awaiting follow-up",
+        disposition: "Can verify while awaiting response",
+        color: "text-amber-700",
+      };
+    }
 
     if (item.lane === "CHALLENGE") {
       return {
@@ -347,6 +367,7 @@ export default function Pharmacy101ExtensionMockup() {
   };
 
   const getQueueSignal = (item) => {
+    if (item?.pattern_assessment === "Pattern-questionable") return { label: "VERIFY - FOLLOW-UP", tone: "amber" };
     if (item.lane === "CHALLENGE") return { label: "HOLD NOW", tone: "red" };
     if (["CLARIFY USE", "COMPLETE"].includes(item.lane)) return { label: "ADDRESS DURING WORKFLOW", tone: "amber" };
     return { label: "VERIFY", tone: "green" };
@@ -402,6 +423,14 @@ export default function Pharmacy101ExtensionMockup() {
     );
     const minor_issue         = structural.includes("minor");
     const borderline_hold     = (lane === "CLARIFY USE" || lane === "COMPLETE") && item.affects === "duration";
+
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return {
+        level: "MEDIUM",
+        className: "border-amber-200 bg-amber-50 text-amber-600 font-medium",
+        style: { opacity: 0.88 },
+      };
+    }
 
     // HOLD lane (CHALLENGE) — red palette
     // HIGH: contradiction, not followable, or high-impact missing | bold, full opacity
@@ -503,7 +532,8 @@ export default function Pharmacy101ExtensionMockup() {
     const laneLabel = getVisibleHeaderState(item, status).label;
     if (status === "pending") return pendingSubStatus[caseId] || "Awaiting prescriber response before next step.";
     if (status === "resolved") return "Action completed. Continue workflow based on resolved direction.";
-    if (laneLabel === "HOLD NOW") return "Confirm intended duration/use details with prescriber before dispensing.";
+    if (laneLabel === "HOLD NOW") return "Confirm the contradictory or unsafe directions with prescriber before dispensing.";
+    if (laneLabel === "VERIFY - FOLLOW-UP") return "Verify as entered and follow up on the intended use or treatment plan.";
     if (laneLabel === "ADDRESS DURING WORKFLOW") return "Clarify missing use boundaries during workflow and document response.";
     return "Verify as entered and continue standard dispensing workflow.";
   };

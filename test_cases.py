@@ -3,6 +3,16 @@
 Each case is a simple dictionary containing `drug`, `sig`, and `quantity`.
 The `run_test_cases` function loops through the list and runs the same
 processing logic used in `app.py` for each case, printing clear output.
+
+Validation rule clarity:
+- A valid shorthand input must include drug name, required qualifier when needed,
+    strength, explicit dose amount in SIG, usable frequency, and quantity.
+- Invalid examples:
+    - Metoprolol tartrate 50 mg qd
+    - Lisinopril 10 mg qd qty 30
+- Corrected valid examples:
+    - Metoprolol tartrate 50 mg 1t po qd (qty 30) -> FLAG
+    - Lisinopril 10 mg 1t po qd (qty 30) -> VERIFY AS ENTERED
 """
 
 from parser import parse_prescription_line
@@ -126,6 +136,10 @@ def get_ui_priority(risk_score: int) -> str:
 def get_override_risk(structural: object, drug: str, sig: str, parsed: object) -> str:
     drug_lower = drug.lower()
     sig_lower = sig.lower()
+    pattern_assessment = str(getattr(structural, "pattern_assessment", "") or "")
+    pattern_issue = str(getattr(structural, "pattern_issue", "") or "")
+    if pattern_assessment == "Pattern-questionable":
+        return "The patient could follow a regimen that differs from the intended treatment plan because the use pattern remains unclear."
     if "ubrelvy" in drug_lower and "as needed" in sig_lower:
         return "Patient may exceed safe daily dose without max limit."
     elif "sildenafil" in drug_lower and "as needed" in sig_lower:
@@ -202,6 +216,7 @@ TEST_CASES = [
     {"drug": "Levothyroxine 88 mcg", "sig": "take 8 tablets by mouth weekly", "quantity": 32},
     {"drug": "Valacyclovir 1 gm", "sig": "take 1 tablet by mouth three times daily", "quantity": 60},
     {"drug": "Levofloxacin 750 mg", "sig": "take 1 tablet by mouth daily", "quantity": 21},
+    {"drug": "Fluconazole 150 mg", "sig": "take 1 tablet by mouth daily", "quantity": 4},
 ]
 
 

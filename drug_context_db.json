@@ -175,6 +175,61 @@
       "structural_caution_notes": [
         "Keep cadence explicit when additional PRN wording appears"
       ]
+    },
+    "fluconazole": {
+      "generic_name": "fluconazole",
+      "brand_names": ["Diflucan"],
+      "class": "antifungal",
+      "aliases": ["fluconazole", "diflucan"],
+      "common_use_patterns": [
+        "single-dose treatment",
+        "weekly scheduled regimen",
+        "short daily course with explicit duration"
+      ],
+      "common_sig_structures": [
+        "take 1 tablet by mouth once as a single dose",
+        "take 1 tablet by mouth once weekly",
+        "take 1 tablet by mouth daily for N days"
+      ],
+      "known_ambiguity_flags": [
+        "daily cadence without explicit duration or treatment context",
+        "multiple scheduled doses without a clearly mapped use pattern"
+      ],
+      "high_risk_clarification_areas": [
+        "intended treatment plan",
+        "course length when daily dosing is used",
+        "whether dosing is single, daily, or weekly"
+      ],
+      "structural_caution_notes": [
+        "A fully written SIG can still need follow-up when daily dosing does not map cleanly to a common fluconazole use pattern"
+      ],
+      "low_ambiguity_regimens": [
+        {
+          "name": "single_dose",
+          "label": "single dose",
+          "frequency_in": ["daily", "once daily", "single dose"],
+          "quantity_in": [1],
+          "disallow_explicit_duration": true,
+          "disallow_prn": true
+        },
+        {
+          "name": "weekly_regimen",
+          "label": "weekly regimen",
+          "frequency_in": ["weekly"],
+          "quantity_min": 2,
+          "disallow_prn": true
+        },
+        {
+          "name": "daily_short_course",
+          "label": "daily short course",
+          "frequency_in": ["daily", "once daily"],
+          "requires_explicit_duration": true,
+          "max_duration_days": 14,
+          "disallow_prn": true
+        }
+      ],
+      "pattern_questionable_severity": "MODERATE",
+      "pattern_questionable_message": "The SIG is structurally complete, but this fluconazole regimen does not map cleanly to a common low-ambiguity use pattern. The intended treatment plan may be unclear even though the directions are fully written."
     }
   }
 }

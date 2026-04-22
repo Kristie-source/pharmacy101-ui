@@ -300,7 +300,14 @@ function Pharmacy101ExtensionMockup() {
 
     const structural = (item?.structural || "").toLowerCase();
 
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return "Clarify intended use";
+    }
+
     if (item.lane === "CHALLENGE") {
+      if (structural.includes("total dose") || structural.includes("strength") || structural.includes("dose/strength")) {
+        return "Clarify total dose";
+      }
       if (structural.includes("max") && structural.includes("dose")) return "Clarify max dose";
       if (structural.includes("course") || structural.includes("duration") || structural.includes("extended")) {
         return "Confirm course length";
@@ -325,7 +332,10 @@ function Pharmacy101ExtensionMockup() {
     const pendingOrigin = pendingOriginById[caseId];
     const isTrueHold =
       pendingOrigin?.lane === "HOLD" ||
-      String(item?.lane || "").toUpperCase() === "CHALLENGE";
+      (
+        String(item?.lane || "").toUpperCase() === "CHALLENGE" &&
+        item?.pattern_assessment !== "Pattern-questionable"
+      );
 
     if (isTrueHold) return "Awaiting MD response — do not dispense";
     return "Verify with follow-up pending";
@@ -343,6 +353,9 @@ function Pharmacy101ExtensionMockup() {
       return null;
     }
     if (status === "resolved") return null;
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return { text: "Can verify, but follow-up on intended use is recommended", color: "text-amber-700" };
+    }
     if (item.lane === "CHALLENGE") return { text: "Do not dispense until clarified", color: "text-red-700" };
     if (["CLARIFY USE", "COMPLETE"].includes(item.lane)) {
       return { text: "Can dispense, but clarification recommended", color: "text-amber-700" };
@@ -352,6 +365,15 @@ function Pharmacy101ExtensionMockup() {
 
   const getPendingOriginMeta = (item) => {
     if (!item) return null;
+
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return {
+        lane: "VERIFY",
+        subStatus: "Awaiting follow-up",
+        disposition: "Can verify while awaiting response",
+        color: "text-amber-700",
+      };
+    }
 
     if (item.lane === "CHALLENGE") {
       return {
@@ -380,6 +402,7 @@ function Pharmacy101ExtensionMockup() {
   };
 
   const getQueueSignal = (item) => {
+    if (item?.pattern_assessment === "Pattern-questionable") return { label: "VERIFY - FOLLOW-UP", tone: "amber" };
     if (item.lane === "CHALLENGE") return { label: "HOLD NOW", tone: "red" };
     if (["CLARIFY USE", "COMPLETE"].includes(item.lane)) return { label: "ADDRESS DURING WORKFLOW", tone: "amber" };
     return { label: "VERIFY", tone: "green" };
@@ -449,6 +472,14 @@ function Pharmacy101ExtensionMockup() {
     );
     const minor_issue         = structural.includes("minor");
     const borderline_hold     = (lane === "CLARIFY USE" || lane === "COMPLETE") && item.affects === "duration";
+
+    if (item?.pattern_assessment === "Pattern-questionable") {
+      return {
+        level: "MEDIUM",
+        className: "border-amber-200 bg-amber-50 text-amber-600 font-medium",
+        style: { opacity: 0.88 },
+      };
+    }
 
     // HOLD lane (CHALLENGE) — red palette
     // HIGH: contradiction, not followable, or high-impact missing | bold, full opacity
@@ -580,7 +611,8 @@ function Pharmacy101ExtensionMockup() {
     const laneLabel = getVisibleHeaderState(item, status).label;
     if (status === "pending") return pendingSubStatus[caseId] || "Awaiting prescriber response before next step.";
     if (status === "resolved") return "Action completed. Continue workflow based on resolved direction.";
-    if (laneLabel === "HOLD NOW") return "Confirm intended duration/use details with prescriber before dispensing.";
+    if (laneLabel === "HOLD NOW") return "Confirm the contradictory or unsafe directions with prescriber before dispensing.";
+    if (laneLabel === "VERIFY - FOLLOW-UP") return "Verify as entered and follow up on the intended use or treatment plan.";
     if (laneLabel === "ADDRESS DURING WORKFLOW") return "Clarify missing use boundaries during workflow and document response.";
     return "Verify as entered and continue standard dispensing workflow.";
   };
@@ -657,7 +689,7 @@ function Pharmacy101ExtensionMockup() {
 
     const sigLower = item.sig.toLowerCase();
     const context = sigLower.includes("prn") || sigLower.includes("as needed") ? "PRN" : "Scheduled";
-    return `${item.title} � ${context}`;
+    return `${item.title} | ${context}`;
   };
 
   const getPatternTemplate = (patternKey) => {
@@ -1310,7 +1342,11 @@ function Pharmacy101ExtensionMockup() {
 
     const newCase = {
       title: data.drug,
+      analysis_id: data.analysis_id || null,
       lane: laneMap[apiResolution] || "VERIFY AS ENTERED",
+      workflow_status: data.workflow_status || null,
+      pattern_assessment: data.pattern_assessment || null,
+      pattern_issue: data.pattern_issue || null,
       sig: data.sig,
       qty: data.quantity,
       structural: data.structural_issue,
@@ -1608,6 +1644,17 @@ function Pharmacy101ExtensionMockup() {
     if (!caseId) return;
     if (isFullyClearVerified(active)) return;
     triggerActionFlash(caseId, "verify-follow-up");
+
+    const analysisId = active?.analysis_id;
+    if (analysisId) {
+      fetch(`http://localhost:8000/analysis/${analysisId}/event`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_type: "verify_followup_pending",
+        }),
+      }).catch(() => {});
+    }
 
     setCases((prev) => prev.map((item) => {
       if (item.id !== caseId) return item;
@@ -1954,6 +2001,41 @@ function Pharmacy101ExtensionMockup() {
                 className="w-full resize-none rounded-xl border border-slate-200 bg-white p-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none"
               />
             </div>
+
+            <details className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+              <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Activity / Handoff
+              </summary>
+              <div className="mt-2 space-y-2 text-sm text-slate-700">
+                {(() => {
+                  const events = Array.isArray(active?.activity_events)
+                    ? active.activity_events
+                    : Array.isArray(active?.events)
+                      ? active.events
+                      : [];
+
+                  if (events.length === 0) {
+                    return <div className="text-xs text-slate-500">No activity yet.</div>;
+                  }
+
+                  return events.map((event, idx) => {
+                    const rawTimestamp = event?.created_at || event?.timestamp || "";
+                    const parsedTs = rawTimestamp ? new Date(rawTimestamp) : null;
+                    const timestamp = parsedTs && !Number.isNaN(parsedTs.getTime())
+                      ? parsedTs.toLocaleString()
+                      : (rawTimestamp || "Unknown time");
+
+                    return (
+                      <div key={`${event?.id || event?.event_id || "event"}-${idx}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                        <div className="text-xs text-slate-500">{timestamp}</div>
+                        <div className="font-medium text-slate-800">{event?.event_type || "unknown_event"}</div>
+                        {event?.note ? <div className="text-xs text-slate-600">{event.note}</div> : null}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </details>
           </section>
 
           <details className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">

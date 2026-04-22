@@ -497,17 +497,17 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
     dose_match = re.search(r'take (\d+) (tablet|capsule|pill)', sig_lower)
     if dose_match and not is_flexible_nonstructured_prn:
         dose_per_admin = int(dose_match.group(1))
-        
+
         # Parse frequency to get doses per day
         doses_per_day = None
-        if 'once daily' in sig_lower or 'daily' in sig_lower or 'every day' in sig_lower:
-            doses_per_day = 1
-        elif 'twice daily' in sig_lower or 'twice a day' in sig_lower or 'bid' in sig_lower:
-            doses_per_day = 2
+        if 'four times daily' in sig_lower or 'qid' in sig_lower:
+            doses_per_day = 4
         elif 'three times daily' in sig_lower or 'tid' in sig_lower:
             doses_per_day = 3
-        elif 'four times daily' in sig_lower or 'qid' in sig_lower:
-            doses_per_day = 4
+        elif 'twice daily' in sig_lower or 'twice a day' in sig_lower or 'bid' in sig_lower:
+            doses_per_day = 2
+        elif 'once daily' in sig_lower or 'every day' in sig_lower or 'daily' in sig_lower:
+            doses_per_day = 1
         elif 'every 12 hours' in sig_lower or 'q12h' in sig_lower:
             doses_per_day = 2
         elif 'every 8 hours' in sig_lower or 'q8h' in sig_lower:
@@ -518,45 +518,71 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
             doses_per_day = 6
         elif 'every 2 hours' in sig_lower:
             doses_per_day = 12
-        
+
         if doses_per_day:
             expected_daily_dose = dose_per_admin * doses_per_day
             implied_duration_days = quantity / expected_daily_dose
-            
-            # Check for structural inconsistencies
-            inconsistency_detected = False
-            severity_level = "MODERATE"
-            
-            # 1. Quantity doesn't divide cleanly (remainder indicates incomplete days)
+
+            # --- NEW LOGIC: Only trigger mismatch if one of the following ---
+            # 1. Explicit duration exists AND implied_duration_days does not match it
+            explicit_duration_match = re.search(r'for (\d+) (day|days|week|weeks|month|months)', sig_lower)
+            explicit_duration = None
+            if explicit_duration_match:
+                num = int(explicit_duration_match.group(1))
+                unit = explicit_duration_match.group(2)
+                if 'week' in unit:
+                    explicit_duration = num * 7
+                elif 'month' in unit:
+                    explicit_duration = num * 30
+                else:
+                    explicit_duration = num
+            duration_mismatch = False
+            if explicit_duration:
+                # Allow 1-day rounding tolerance
+                if abs(implied_duration_days - explicit_duration) > 1:
+                    duration_mismatch = True
+
+            # 2. Single-dose pattern AND quantity exceeds expected single-dose amount
+            single_dose_pattern = doses_per_day == 1 and explicit_duration == 1
+            single_dose_excess = single_dose_pattern and quantity > dose_per_admin
+
+            # 3. Clearly non-reconcilable quantity/regimen structure
+            # (e.g., quantity does not divide evenly and remainder is significant)
+            non_reconcilable = False
             if quantity % expected_daily_dose != 0:
-                # Only flag if remainder is significant (>10% of daily dose)
                 remainder = quantity % expected_daily_dose
                 if remainder > expected_daily_dose * 0.1:
-                    inconsistency_detected = True
-            
-            # 2. Implied duration is unusually long (>30 days for most medications)
-            if implied_duration_days > 30:
-                inconsistency_detected = True
-                severity_level = "HIGH"
-            
-            # 3. Implied duration is very short (<1 day) but quantity suggests multiple doses
-            if implied_duration_days < 1 and quantity > expected_daily_dose:
-                inconsistency_detected = True
-            
-            # 4. Quantity implies a course much longer than typical short-term therapy
+                    non_reconcilable = True
+
+            # 4. Implied duration is unusually long (>30 days for most medications)
+            unusually_long = implied_duration_days > 30
+
+            # 5. Implied duration is very short (<1 day) but quantity suggests multiple doses
+            very_short = implied_duration_days < 1 and quantity > expected_daily_dose
+
+            # 6. Quantity implies a course much longer than typical short-term therapy
             # Flag if quantity suggests >10 days for medications typically used short-term
-            if implied_duration_days > 10 and quantity > expected_daily_dose * 7:
-                inconsistency_detected = True
-            
-            # 2. Implied duration is unusually long (>30 days for most medications)
-            if implied_duration_days > 30:
-                inconsistency_detected = True
-                severity_level = "HIGH"
-                structural_issue_text = f"Quantity implies an unusually long course ({implied_duration_days:.1f} days) that conflicts with current directions."
-            else:
+            long_short_term = implied_duration_days > 10 and quantity > expected_daily_dose * 7
+
+            # 7. Suppress for routine maintenance fills (e.g., daily qty 30, BID qty 60, etc.)
+            is_maintenance = (
+                (doses_per_day == 1 and quantity in [28, 30, 31, 32, 90]) or
+                (doses_per_day == 2 and quantity in [56, 60, 62, 90]) or
+                (doses_per_day == 3 and quantity in [84, 90])
+            )
+
+            # Only emit an issue if a real mismatch, ambiguity, or uncertainty is detected
+            if (
+                duration_mismatch
+                or single_dose_excess
+                or non_reconcilable
+                or unusually_long
+                or very_short
+                or long_short_term
+            ) and not is_maintenance:
                 structural_issue_text = "Quantity and directions imply a duration that may be inconsistent with intended course length."
-            
-            if inconsistency_detected:
+                if unusually_long:
+                    structural_issue_text = f"Quantity implies an unusually long course ({implied_duration_days:.1f} days) that conflicts with current directions."
                 return CasePattern(
                     name="quantity_sig_consistency",
                     structural_issue=structural_issue_text,
@@ -572,5 +598,4 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                     internal_message=f"Quantity ({quantity}) implies {implied_duration_days:.1f} days at {expected_daily_dose} doses/day; duration verification needed.",
                     documentation_template=f"Prescription written for {drug}, {sig}, quantity {quantity}. Quantity implies {implied_duration_days:.1f}-day course at {expected_daily_dose} doses/day.",
                 )
-
     return None

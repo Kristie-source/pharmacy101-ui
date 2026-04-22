@@ -24,6 +24,30 @@ from typing import Optional, Dict, Any
 # ---------------------------------------------------------------------------
 
 ISSUE_COPY = {
+    "DOSE_UNIT_FORMULATION_INCONSISTENCY": {
+        "issue_line": "Dose, unit, and formulation do not reconcile cleanly",
+        "why_this_matters": "The strength expression and dosage unit imply a total administration amount that may not match intended formulation use.",
+        "action_line": "Confirm intended formulation and per-administration dose with prescriber before dispensing",
+        "default_badge": "🔴 CHALLENGE",
+    },
+    "DOSE_STRENGTH_CONSISTENCY": {
+        "issue_line": "Strength and tablet count create an inconsistent total dose",
+        "why_this_matters": "The implied dose per administration is higher than expected for common use patterns and may not reflect intended prescribing intent.",
+        "action_line": "Confirm intended total dose per administration with prescriber before dispensing",
+        "default_badge": "🔴 CHALLENGE",
+    },
+    "PATTERN_QUESTIONABLE": {
+        "issue_line": "Regimen is complete but intended use pattern is unclear",
+        "why_this_matters": "The entered schedule does not map cleanly to a common low-ambiguity treatment pattern for this medication.",
+        "action_line": "Clarify intended use or treatment plan with prescriber",
+        "default_badge": "🟠 CLARIFY USE",
+    },
+    "FREQUENCY_MISMATCH": {
+        "issue_line": "Frequency mismatch between product and schedule",
+        "why_this_matters": "Immediate-release metoprolol is typically dosed more than once daily; once-daily dosing may not provide full-day coverage.",
+        "action_line": "Confirm intended dosing frequency with prescriber",
+        "default_badge": "🟠 CLARIFY USE",
+    },
     "PRN_SCHEDULED_CONFLICT": {
         "issue_line": "PRN use is mixed with scheduled dosing",
         "why_this_matters": "Patient may not know whether to take this only during episodes or as an ongoing scheduled medication.",
@@ -124,8 +148,8 @@ def normalize_issue_type(raw_issue_text: str) -> str:
     if not text:
         return ""
 
-        if text.lower().startswith("no obvious structural issue"):
-                return ""
+    if text.lower().startswith("no obvious structural issue"):
+        return ""
 
     upper_text = text.upper()
     if upper_text in ISSUE_COPY:
@@ -149,8 +173,23 @@ def normalize_issue_type(raw_issue_text: str) -> str:
     if "short-acting" in lower_text and "once daily" in lower_text:
         return "SHORT_ACTING_DAILY"
 
+    if "frequency mismatch" in lower_text and "metoprolol" in lower_text:
+        return "FREQUENCY_MISMATCH"
+
+    if "immediate-release metoprolol" in lower_text and "once-daily" in lower_text:
+        return "FREQUENCY_MISMATCH"
+
     if "acute" in lower_text and "quantity" in lower_text:
         return "ACUTE_DRUG_CHRONIC_QTY"
+
+    if "dose / unit / formulation inconsistency" in lower_text:
+        return "DOSE_UNIT_FORMULATION_INCONSISTENCY"
+
+    if "dose/strength consistency concern" in lower_text or ("strength" in lower_text and "total dose" in lower_text):
+        return "DOSE_STRENGTH_CONSISTENCY"
+
+    if "pattern-questionable" in lower_text or "intended treatment plan may be unclear" in lower_text:
+        return "PATTERN_QUESTIONABLE"
 
     return text
 
@@ -199,6 +238,9 @@ def _fallback_issue_line(issue_type: Optional[str]) -> str:
     if not issue_type:
         return "No issue identified"
     custom = {
+        "DOSE_UNIT_FORMULATION_INCONSISTENCY": "Dose, unit, and formulation do not reconcile cleanly",
+        "DOSE_STRENGTH_CONSISTENCY": "Strength and tablet count create an inconsistent total dose",
+        "PATTERN_QUESTIONABLE": "Regimen is complete but intended use pattern is unclear",
         "MISSING_DOSE_FORM": "Dose form is not specified",
         "QUANTITY_MISMATCH": "Quantity may not align with the written directions",
         "HIGH_DAILY_DOSE": "Daily dose appears high",
@@ -213,6 +255,9 @@ def _fallback_why_this_matters(issue_type: Optional[str]) -> Optional[str]:
     if not issue_type:
         return None
     custom = {
+        "DOSE_UNIT_FORMULATION_INCONSISTENCY": "The strength expression and dosage unit imply a per-administration total that may not match intended formulation use.",
+        "DOSE_STRENGTH_CONSISTENCY": "The implied per-administration dose is higher than expected and may represent an unintended total dose.",
+        "PATTERN_QUESTIONABLE": "The entered schedule does not match a common low-ambiguity treatment pattern for this medication.",
         "MISSING_DOSE_FORM": "Use may be unclear without knowing the intended form.",
         "QUANTITY_MISMATCH": "Supply may not match the intended course or dosing pattern.",
         "HIGH_DAILY_DOSE": "Dose may exceed what the patient is expected to use safely.",
@@ -227,6 +272,9 @@ def _fallback_action_line(issue_type: Optional[str], lane: Optional[str]) -> str
     if lane == "PASSIVE":
         return "No further action needed"
     custom = {
+        "DOSE_UNIT_FORMULATION_INCONSISTENCY": "Confirm intended formulation and per-administration dose with prescriber before dispensing",
+        "DOSE_STRENGTH_CONSISTENCY": "Confirm intended total dose per administration with prescriber before dispensing",
+        "PATTERN_QUESTIONABLE": "Clarify intended use or treatment plan with prescriber",
         "MISSING_DOSE_FORM": "Obtain dose form from prescriber",
         "QUANTITY_MISMATCH": "Review quantity with prescriber before dispensing",
         "HIGH_DAILY_DOSE": "Review dose with prescriber before dispensing",

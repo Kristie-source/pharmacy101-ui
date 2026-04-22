@@ -1,6 +1,7 @@
 import re
 from models import ParsedPrescription
 from typing import Optional
+from structure_patterns import classify_structure_pattern
 
 
 # CATEGORY A: drugs that require a distinguishing product qualifier (salt form, release type, formulation).
@@ -17,14 +18,8 @@ ENHANCED_IDENTITY_RULES = {
     "bupropion": {
         "required_qualifiers": ["xl", "xr", "sr", "ir", "extended", "sustained", "immediate"],
     },
-    "diltiazem": {
-        "required_qualifiers": ["xr", "er", "cd", "sr", "extended", "sustained"],
-    },
     "venlafaxine": {
         "required_qualifiers": ["xr", "xl", "er", "extended"],
-    },
-    "nifedipine": {
-        "required_qualifiers": ["xr", "er", "xl", "extended"],
     },
 }
 
@@ -44,119 +39,6 @@ KNOWN_VALID_STRENGTHS = {
     "levothyroxine": {
         "normalize_to": "mcg",
         "allowed_values": [25, 50, 75, 88, 100, 112, 125, 137, 150, 175, 200, 225, 250, 300],
-    },
-    # Category A: qualifier-dependent strength validation
-    "metoprolol": {
-        "qualifier_rules": {
-            "succinate": {
-                "normalize_to": "mg",
-                "allowed_values": [25, 50, 100, 200],
-            },
-            "tartrate": {
-                "normalize_to": "mg",
-                "allowed_values": [25, 37.5, 50, 75, 100],
-            },
-        },
-    },
-    "bupropion": {
-        "qualifier_rules": {
-            "xl": {
-                "normalize_to": "mg",
-                "allowed_values": [300, 450],
-            },
-            "xr": {
-                "normalize_to": "mg",
-                "allowed_values": [150, 300],
-            },
-            "sr": {
-                "normalize_to": "mg",
-                "allowed_values": [100, 150, 200],
-            },
-            "ir": {
-                "normalize_to": "mg",
-                "allowed_values": [75, 100, 150],
-            },
-            "extended": {
-                "normalize_to": "mg",
-                "allowed_values": [300, 450],
-            },
-            "sustained": {
-                "normalize_to": "mg",
-                "allowed_values": [100, 150, 200],
-            },
-            "immediate": {
-                "normalize_to": "mg",
-                "allowed_values": [75, 100, 150],
-            },
-        },
-    },
-    "diltiazem": {
-        "qualifier_rules": {
-            "xr": {
-                "normalize_to": "mg",
-                "allowed_values": [120, 180, 240, 300, 360, 420],
-            },
-            "er": {
-                "normalize_to": "mg",
-                "allowed_values": [120, 180, 240, 300, 360, 420],
-            },
-            "cd": {
-                "normalize_to": "mg",
-                "allowed_values": [120, 180, 240, 300, 360, 420],
-            },
-            "sr": {
-                "normalize_to": "mg",
-                "allowed_values": [60, 90, 120],
-            },
-            "extended": {
-                "normalize_to": "mg",
-                "allowed_values": [120, 180, 240, 300, 360, 420],
-            },
-            "sustained": {
-                "normalize_to": "mg",
-                "allowed_values": [60, 90, 120],
-            },
-        },
-    },
-    "venlafaxine": {
-        "qualifier_rules": {
-            "xr": {
-                "normalize_to": "mg",
-                "allowed_values": [37.5, 75, 150, 225, 300],
-            },
-            "xl": {
-                "normalize_to": "mg",
-                "allowed_values": [75, 150, 225, 300],
-            },
-            "er": {
-                "normalize_to": "mg",
-                "allowed_values": [37.5, 75, 150, 225, 300],
-            },
-            "extended": {
-                "normalize_to": "mg",
-                "allowed_values": [37.5, 75, 150, 225, 300],
-            },
-        },
-    },
-    "nifedipine": {
-        "qualifier_rules": {
-            "xr": {
-                "normalize_to": "mg",
-                "allowed_values": [30, 60, 90],
-            },
-            "er": {
-                "normalize_to": "mg",
-                "allowed_values": [30, 60, 90],
-            },
-            "xl": {
-                "normalize_to": "mg",
-                "allowed_values": [30, 60, 90],
-            },
-            "extended": {
-                "normalize_to": "mg",
-                "allowed_values": [30, 60, 90],
-            },
-        },
     },
 }
 
@@ -347,7 +229,11 @@ def parse_frequency(sig: str) -> Optional[str]:
     if "." in sig_lower:
         sig_lower = sig_lower.split(".", 1)[0].strip()
 
-    # Common frequency patterns
+    # One-time/single-dose regimens are valid complete structures even without recurring cadence.
+    if _is_single_dose_structure(sig_lower):
+        return "single dose"
+
+    # Common recurring frequency patterns
     frequency_patterns = [
         r'every\s+(\d+)\s+hours?',
         r'every\s+(\d+)\s+hrs?',
@@ -425,9 +311,48 @@ def parse_frequency(sig: str) -> Optional[str]:
     return None
 
 
+def _is_single_dose_structure(sig: str) -> bool:
+    sig_lower = str(sig or "").lower().strip()
+    if not sig_lower:
+        return False
+
+    explicit_one_time_patterns = [
+        r"\bfor\s+(?:one|1)\s+dose\b",
+        r"\bsingle\s*dose\b",
+        r"\bone[-\s]?time\b",
+        r"\bx\s*1\b",
+    ]
+    if any(re.search(pattern, sig_lower) for pattern in explicit_one_time_patterns):
+        return True
+
+    if not re.search(r"\bonce\b", sig_lower):
+        return False
+
+    recurring_once_patterns = [
+        r"\bonce\s+daily\b",
+        r"\bonce\s+a\s+day\b",
+        r"\bonce\s+weekly\b",
+        r"\bonce\s+a\s+week\b",
+        r"\bonce\s+monthly\b",
+        r"\bonce\s+a\s+month\b",
+    ]
+    if any(re.search(pattern, sig_lower) for pattern in recurring_once_patterns):
+        return False
+
+    return True
+
+
 def parse_prescription_line(raw_text: str) -> ParsedPrescription:
     """
-    Expected example:
+    Required elements for a valid shorthand prescription input:
+    - Drug name
+    - Required qualifier when applicable (for example, tartrate/succinate)
+    - Strength
+    - Dose amount in the SIG (for example, 1t, 1 tab, 2 tabs)
+    - Usable frequency
+    - Quantity
+
+    Example:
     Valacyclovir 1 gm - take 1 tablet by mouth every 12 hours (qty 28)
     """
 
@@ -472,7 +397,7 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
     )
     if not strength_pattern.search(drug):
         raise ValueError(
-            "Missing drug strength. Add strength like 500 mg or 1 g."
+            "Missing drug strength. When drug name, SIG, and quantity are present, strength is required (for example, 500 mg or 1 g)."
         )
 
     _validate_enhanced_drug_identity(drug)
@@ -500,9 +425,32 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
             f"Parsing incomplete: unresolved shorthand '{unresolved}' in SIG. "
             "Please expand it (for example, 'qhs' -> 'nightly') and try again."
         )
+
+    # Run structure-only pattern detection before missing-field checks.
+    structure_pattern = classify_structure_pattern(sig)
+
+    # Require an explicit SIG dose amount (for example, 1 tablet / 2 capsules).
+    has_dose_amount = bool(
+        re.search(
+            r"\b\d+\s*(?:tablets?|tabs?|capsules?|caps?|puffs?|drops?|teaspoons?|tsp|ml|mL)\b",
+            sig,
+            flags=re.IGNORECASE,
+        )
+    )
+    if not has_dose_amount:
+        raise ValueError(
+            "Missing dose amount in SIG. Include a dose amount such as '1t', '1 tab', or '2 tabs'."
+        )
     
     # Parse frequency from SIG
     frequency = parse_frequency(sig)
+    if not frequency and _is_single_dose_structure(sig):
+        frequency = "single dose"
+
+    if not frequency and structure_pattern.requires_frequency:
+        raise ValueError(
+            "Missing usable SIG frequency. Include a schedule such as daily, BID, TID, q12h, or weekly."
+        )
 
     return ParsedPrescription(
         raw_text=text,
@@ -510,4 +458,7 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
         sig=sig,
         quantity=quantity,
         frequency=frequency,
+        structure_pattern=structure_pattern.pattern_name,
+        structure_complete=structure_pattern.structurally_complete,
+        structure_missing=structure_pattern.missing_elements,
     )

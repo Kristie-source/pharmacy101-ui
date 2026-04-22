@@ -88,6 +88,9 @@ def generate_message(drug: str, sig: str, quantity: int, frequency: Optional[str
     if lane == "NONE":
         prescriber_msg = "No message needed."
         internal_msg = "No clarification message needed."
+    elif structural.pattern_assessment == "Pattern-questionable":
+        prescriber_msg = "Please clarify the intended use or treatment plan for this regimen."
+        internal_msg = "Structurally complete directions do not map cleanly to a common low-ambiguity use pattern; follow-up on intended treatment plan is recommended."
     elif lane == "CLARIFY USE":
         prescriber_msg = "This order may benefit from documentation of intent or indication."
         internal_msg = "Consider documenting clinical intent or indication."

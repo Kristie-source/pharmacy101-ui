@@ -28,9 +28,9 @@ def get_action_bias(resolution: str) -> str:
 
 
 def get_follow_up_need(structural: object) -> str:
-    lane = _lane_token(structural.resolution)
     safe_to_verify = get_safe_to_verify(structural)
-    if lane == "NONE":
+    risk_severity = str(getattr(structural, "risk_severity", "LOW") or "LOW").upper()
+    if risk_severity == "LOW" and safe_to_verify != "🔴 UNSAFE":
         return "🟢 NO FOLLOW-UP NEEDED"
     if safe_to_verify == "🔴 UNSAFE":
         return "🔴 REQUIRED BEFORE VERIFY"
@@ -38,6 +38,12 @@ def get_follow_up_need(structural: object) -> str:
 
 
 def get_safe_to_verify(structural: object) -> str:
+    immediate_usability = str(getattr(structural, "immediate_usability", "") or "").upper()
+    if immediate_usability == "NO":
+        return "🔴 UNSAFE"
+    if immediate_usability == "YES":
+        return "🟡 SAFE WITH GUIDANCE" if str(getattr(structural, "risk_severity", "LOW") or "LOW").upper() in {"MODERATE", "HIGH"} else "🟢 SAFE"
+
     lane = _lane_token(structural.resolution)
     structural_text = structural.structural_issue.lower()
     if lane in ["COMPLETE", "CLARIFY USE"]:
@@ -53,6 +59,14 @@ def get_safe_to_verify(structural: object) -> str:
 
 
 def get_severity(structural: object) -> str:
+    risk_severity = str(getattr(structural, "risk_severity", "") or "").upper()
+    if risk_severity == "HIGH":
+        return "🔴 HIGH"
+    if risk_severity == "MODERATE":
+        return "🟡 MODERATE"
+    if risk_severity == "LOW":
+        return "🟢 LOW"
+
     lane = _lane_token(structural.resolution)
     if lane in ["COMPLETE", "CLARIFY USE"]:
         # Special case: Non-daily dosing ambiguity should be MODERATE severity
@@ -121,8 +135,15 @@ def get_override_risk(structural: object, drug: str, sig: str, parsed: object) -
     # If there is no structural ambiguity trigger, we intentionally return
     # no-risk text to avoid DUR-style alerting drift and alert fatigue.
     lane = _lane_token(structural.resolution)
+    pattern_assessment = str(getattr(structural, "pattern_assessment", "") or "")
+    pattern_issue = str(getattr(structural, "pattern_issue", "") or "")
     if lane == "NONE" or str(structural.affects).lower() == "none":
+        if pattern_assessment == "Pattern-questionable":
+            return "The patient could follow a regimen that differs from the intended treatment plan because the use pattern remains unclear."
         return "No significant risk from proceeding."
+
+    if pattern_assessment == "Pattern-questionable":
+        return "The patient could follow a regimen that differs from the intended treatment plan because the use pattern remains unclear."
 
     drug_lower = drug.lower()
     sig_lower = sig.lower()
@@ -131,20 +152,21 @@ def get_override_risk(structural: object, drug: str, sig: str, parsed: object) -
     elif "sildenafil" in drug_lower and "as needed" in sig_lower:
         return "Patient may take inappropriately without frequency guidance."
     elif "valacyclovir" in drug_lower and "prn" in sig_lower:
-        return "Patient may misuse antiviral without clear usage structure."
+        return "Patient may start treatment at the wrong time or use repeated doses inappropriately."
     elif "valacyclovir" in drug_lower and parsed.frequency == "every 12 hours":
-        return "Incorrect duration assumption could lead to undertreatment."
+        return "Patient may stop too soon or continue too long, leading to undertreatment or unnecessary antiviral exposure."
     elif "metoprolol tartrate" in drug_lower and parsed.frequency in ["daily", "once daily"]:
         return "Once-daily dosing may not provide adequate blood pressure control."
     elif "azithromycin" in drug_lower and parsed.frequency in ["daily", "once daily"]:
-        return "Extended course without indication may promote resistance."
+        return "Patient may continue therapy longer than intended, increasing adverse effects and resistance pressure."
+    elif "quantity stands out:" in structural.structural_issue.lower():
+        return "Patient may continue therapy longer than intended or keep excess medication for unintended future use."
 
     safe_to_verify = get_safe_to_verify(structural)
     if safe_to_verify == "🔴 UNSAFE":
         if ("prn" in sig_lower or "as needed" in sig_lower) and parsed.frequency:
             return (
-                f"Patient may interpret the medication as ongoing {parsed.frequency} use when episodic use was intended. "
-                "Unclear use pattern may lead to unintended repeated use."
+                "Patient may use medication more frequently than intended or misunderstand when to take it."
             )
 
         event_triggers = [
@@ -153,27 +175,28 @@ def get_override_risk(structural: object, drug: str, sig: str, parsed: object) -
         ]
         if any(trigger in sig_lower for trigger in event_triggers):
             return (
-                "Medication may be used repeatedly without a clearly defined use pattern. "
-                "Unclear event-based instructions may lead to inconsistent or unintended repeated use."
+                "Patient may repeat the medication at the wrong times or more often than intended."
             )
 
         if "non-daily dosing" in structural.structural_issue.lower():
             return (
-                "Non-daily dosing ambiguity may lead to misinterpretation of frequency and total exposure. "
-                "Please verify the intended timing before proceeding."
+                "Patient may take too much or too little over time because the timing pattern can be misunderstood."
             )
 
         if (
             "extended course" in structural.structural_issue.lower()
             or "quantity implies an extended course" in structural.structural_issue.lower()
             or "intended course structure" in structural.structural_issue.lower()
+            or "duration missing" in structural.structural_issue.lower()
         ):
             return (
-                "Entered directions and quantity create uncertainty about intended course structure, which may lead to unintended regimen execution. "
-                "Verify intended duration and course design before proceeding."
+                "Patient may use the medication longer or shorter than intended, leading to incomplete treatment or unnecessary exposure."
             )
 
-        return f"{structural.structural_issue} Verify before proceeding."
+        if "quantity mismatch" in structural.structural_issue.lower():
+            return "Patient may run out early or continue therapy longer than intended."
+
+        return "Patient may follow the medication differently than intended, which could affect safety or treatment success."
 
     return "No significant risk from proceeding."
 

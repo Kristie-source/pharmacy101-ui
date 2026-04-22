@@ -6,7 +6,7 @@ from typing import Optional
 import csv
 import io
 import re
-from parser import parse_prescription_line
+import string
 from structural import detect_structural_issue
 from knowledge_refresh import explain_pattern
 from documenter import generate_documentation
@@ -36,9 +36,51 @@ from resolution_memory import (
     save_resolution_record,
     validate_resolve_input,
 )
+from validation_buckets import run_invalid_bucket
 
 app = FastAPI()
 init_resolution_memory_tables()
+
+
+def init_event_log_table() -> None:
+    conn = get_connection()
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS analysis_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            analysis_id INTEGER NOT NULL,
+            event_type TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            note TEXT,
+            pharmacist_id TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def insert_event(
+    analysis_id: int,
+    event_type: str,
+    note: Optional[str] = None,
+    pharmacist_id: Optional[str] = None,
+) -> int:
+    conn = get_connection()
+    cursor = conn.execute(
+        """
+        INSERT INTO analysis_events (analysis_id, event_type, note, pharmacist_id)
+        VALUES (?, ?, ?, ?)
+        """,
+        (analysis_id, event_type, note, pharmacist_id),
+    )
+    conn.commit()
+    event_id = int(cursor.lastrowid)
+    conn.close()
+    return event_id
+
+
+init_event_log_table()
 
 
 def _normalize_export_status(value: str | None) -> str:
@@ -97,7 +139,10 @@ def _has_structural_trigger(structural: object) -> bool:
     lane = str(getattr(structural, "resolution", "") or "").upper()
     affects = str(getattr(structural, "affects", "") or "").lower()
     issue_text = str(getattr(structural, "structural_issue", "") or "").lower()
+    pattern_assessment = str(getattr(structural, "pattern_assessment", "") or "")
 
+    if pattern_assessment == "Pattern-questionable":
+        return True
     if "NONE" in lane:
         return False
     if affects not in {"instructions", "duration", "frequency"}:
@@ -105,6 +150,125 @@ def _has_structural_trigger(structural: object) -> bool:
     if not issue_text or issue_text.startswith("no obvious structural issue"):
         return False
     return True
+
+
+def _capitalize_sentence_start(text: Optional[str]) -> Optional[str]:
+    value = str(text or "")
+    if not value:
+        return text
+
+    for idx, ch in enumerate(value):
+        if ch.isalpha():
+            if ch.islower():
+                return f"{value[:idx]}{ch.upper()}{value[idx + 1:]}"
+            return value
+
+    return value
+
+
+def _capitalize_clinical_check_fields(payload: dict) -> dict:
+    sentence_fields = (
+        "structural_issue",
+        "override_risk",
+        "refresh_conclusion",
+        "documentation",
+        "prescriber_message",
+        "internal_message",
+        "issue_line",
+        "why_this_matters",
+        "action_line",
+        "known_pattern_message",
+    )
+
+    for field in sentence_fields:
+        if field in payload and isinstance(payload[field], str):
+            payload[field] = _capitalize_sentence_start(payload[field])
+
+    if isinstance(payload.get("refresh_points"), list):
+        payload["refresh_points"] = [
+            _capitalize_sentence_start(point) if isinstance(point, str) else point
+            for point in payload["refresh_points"]
+        ]
+
+    return payload
+
+
+def _normalize_sentence_for_compare(text: Optional[str]) -> str:
+    raw = str(text or "").strip().lower()
+    if not raw:
+        return ""
+    stripped = raw.translate(str.maketrans("", "", string.punctuation))
+    return " ".join(stripped.split())
+
+
+def _extract_refresh_deviation(refresh_points: list) -> Optional[str]:
+    for point in refresh_points or []:
+        if not isinstance(point, str):
+            continue
+        lower_point = point.lower()
+        if lower_point.startswith("why this stands out:"):
+            return point.split(":", 1)[1].strip() if ":" in point else point.strip()
+    return None
+
+
+def _fallback_deviation(payload: dict) -> str:
+    pattern_assessment = str(payload.get("pattern_assessment", "") or "")
+    structural_issue = str(payload.get("structural_issue", "") or "")
+    affects = str(payload.get("affects", "") or "")
+
+    if pattern_assessment == "Pattern-questionable":
+        return "Directions are structurally complete, but the regimen does not align cleanly with a recognized low-ambiguity pattern for this drug."
+    if "dose / unit / formulation inconsistency" in structural_issue.lower():
+        return "The stated strength expression and administration unit imply different formulation assumptions."
+    if affects == "duration":
+        return "The written duration structure does not cleanly map to the implied course pattern."
+    if affects == "frequency":
+        return "The schedule wording does not fully align with a single, unambiguous administration cadence."
+    return "The written structure diverges from expected instruction patterning and needs targeted follow-up."
+
+
+def _fallback_risk(payload: dict) -> str:
+    affects = str(payload.get("affects", "") or "")
+    structural_issue = str(payload.get("structural_issue", "") or "").lower()
+
+    if "dose / unit / formulation inconsistency" in structural_issue:
+        return "Dispensing against a mismatched formulation assumption may cause unintended per-administration exposure."
+    if affects == "duration":
+        return "The patient may continue longer or shorter than intended, with risk of under- or over-treatment."
+    if affects == "frequency":
+        return "The patient may use the medication at an unintended cadence, reducing effectiveness or increasing adverse effects."
+    if affects == "instructions":
+        return "Ambiguous instructions may lead to incorrect use at the point of administration."
+    return "Proceeding without clarification may result in medication use that differs from prescriber intent."
+
+
+def _apply_non_redundant_clinical_sections(payload: dict) -> dict:
+    clinical_check = str(payload.get("issue_line") or payload.get("structural_issue") or "").strip()
+    deviation = str(payload.get("why_this_matters") or "").strip()
+    if not deviation:
+        deviation = str(_extract_refresh_deviation(payload.get("refresh_points", [])) or "").strip()
+    risk = str(payload.get("override_risk") or "").strip()
+
+    normalized_clinical = _normalize_sentence_for_compare(clinical_check)
+    normalized_deviation = _normalize_sentence_for_compare(deviation)
+    normalized_risk = _normalize_sentence_for_compare(risk)
+
+    if not deviation or normalized_deviation == normalized_clinical:
+        deviation = _fallback_deviation(payload)
+        normalized_deviation = _normalize_sentence_for_compare(deviation)
+
+    if not risk or normalized_risk in {normalized_clinical, normalized_deviation}:
+        risk = _fallback_risk(payload)
+
+    payload["clinical_check"] = clinical_check
+    payload["deviation"] = deviation
+    payload["risk"] = risk
+
+    # Keep legacy fields aligned with non-redundant section content.
+    payload["issue_line"] = clinical_check
+    payload["why_this_matters"] = deviation
+    payload["override_risk"] = risk
+    return payload
 
 app.add_middleware(
     CORSMiddleware,
@@ -135,12 +299,21 @@ class ResolveInput(BaseModel):
     note: Optional[str] = None
     pharmacist_id: Optional[str] = None
 
+
+class AnalysisEventInput(BaseModel):
+    event_type: str
+    note: Optional[str] = None
+    pharmacist_id: Optional[str] = None
+
 @app.post("/analyze")
 def analyze(input: PrescriptionInput):
-    try:
-        parsed = parse_prescription_line(input.raw_text)
-    except ValueError as e:
-        return {"status": "INVALID", "error": str(e)}
+    invalid_outcome = run_invalid_bucket(input.raw_text)
+    if invalid_outcome.is_invalid:
+        return {"status": "INVALID", "error": invalid_outcome.error or "Invalid input."}
+
+    parsed = invalid_outcome.parsed
+    if parsed is None:
+        return {"status": "INVALID", "error": "Invalid input."}
 
     structural = detect_structural_issue(
         parsed.drug, parsed.sig, parsed.quantity, parsed.frequency
@@ -184,11 +357,18 @@ def analyze(input: PrescriptionInput):
         "affects": structural.affects,
         "clarification": structural.clarification,
         "resolution": structural.resolution,
+        "structure_assessment": structural.structure_assessment,
+        "pattern_assessment": structural.pattern_assessment,
+        "pattern_issue": structural.pattern_issue,
+        "pattern_context_supported": structural.pattern_context_supported,
         "drug_recognition_status": structural.drug_recognition_status,
         "drug_recognition_match": structural.drug_recognition_match,
         "safe_to_verify": safe_to_verify,
         "follow_up_need": follow_up_need,
         "severity": severity,
+        "risk_severity": structural.risk_severity,
+        "immediate_usability": structural.immediate_usability,
+        "workflow_status": structural.workflow_status,
         "risk_score": risk_score,
         "ui_priority": get_ui_priority(risk_score),
         "action_bias": get_action_bias(structural.resolution),
@@ -206,6 +386,8 @@ def analyze(input: PrescriptionInput):
         result["llm_prompt_text"] = msg.prompt_text
         result["drug_context_block"] = build_compact_drug_context_block(parsed.drug)
 
+    result = _capitalize_clinical_check_fields(result)
+
     pattern_key = build_pattern_key(parsed.drug, parsed.sig, parsed.quantity)
     result["pattern_key"] = pattern_key
 
@@ -213,7 +395,10 @@ def analyze(input: PrescriptionInput):
     result["analysis_id"] = analysis_id
     result["history_summary"] = get_history_summary_by_pattern_key(pattern_key, analysis_id)
 
-    issue_type = ui_helpers.normalize_issue_type(structural.structural_issue) if has_structural_trigger else ""
+    if structural.pattern_assessment == "Pattern-questionable":
+        issue_type = "PATTERN_QUESTIONABLE"
+    else:
+        issue_type = ui_helpers.normalize_issue_type(structural.structural_issue) if has_structural_trigger else ""
 
     rx_id_check = validate_rx_instance_id(input.rx_instance_id)
     rx_instance_id_valid = rx_id_check["valid"]
@@ -280,6 +465,8 @@ def analyze(input: PrescriptionInput):
             "lane": lane,
             "history_match_type": history_match_type,
         })
+        result = _apply_non_redundant_clinical_sections(result)
+        result = _capitalize_clinical_check_fields(result)
     except Exception as e:
         print("UI_HELPERS_ERROR:", repr(e))
         print("DEBUG structural_issue:", repr(structural.structural_issue))
@@ -331,6 +518,17 @@ def resolve(analysis_id: int, body: ResolveInput):
 
     update_resolution(analysis_id, body.resolution_state, body.note or "")
     return {"status": "ok"}
+
+
+@app.post("/analysis/{analysis_id}/event")
+def record_analysis_event(analysis_id: int, body: AnalysisEventInput):
+    event_id = insert_event(
+        analysis_id=analysis_id,
+        event_type=body.event_type,
+        note=body.note,
+        pharmacist_id=body.pharmacist_id,
+    )
+    return {"status": "ok", "event_id": event_id}
 
 @app.get("/audit")
 def audit(limit: int = 100):

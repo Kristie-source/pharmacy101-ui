@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 
@@ -9,6 +9,9 @@ class ParsedPrescription:
     sig: str
     quantity: int
     frequency: Optional[str] = None
+    structure_pattern: str = "unclassified"
+    structure_complete: bool = False
+    structure_missing: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -19,6 +22,13 @@ class StructuralResult:
     resolution: str
     drug_recognition_status: str
     drug_recognition_match: Optional[str] = None
+    risk_severity: str = "LOW"
+    immediate_usability: str = "YES"
+    workflow_status: str = "Resolved"
+    structure_assessment: str = "Structural concern"
+    pattern_assessment: str = "Pattern not evaluated"
+    pattern_issue: str = ""
+    pattern_context_supported: bool = False
 
 
 @dataclass
@@ -40,6 +50,9 @@ class ClassificationResult:
     risk_score: int
     ui_priority: str
     override_risk: str
+    risk_severity: str
+    immediate_usability: str
+    workflow_status: str
 
 
 @dataclass
