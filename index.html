@@ -139,7 +139,40 @@ React.useEffect(() => {
   const [pendingOriginById, setPendingOriginById] = React.useState({});
   const [pendingMovedAtById, setPendingMovedAtById] = React.useState({});
   const readyToSendMessageRef = React.useRef(null);
-  const active = cases.find((item) => item.id === activeCaseId) || cases[0] || null;
+  const emptyActiveCase = {
+  id: "empty-active-case",
+  title: "No active case",
+  lane: "NONE",
+  sig: "",
+  qty: "",
+  structural: "No active case selected.",
+  affects: "none",
+  clarification: "None",
+  resolution: {
+    label: "NONE",
+    emoji: "🟢",
+    bg: "bg-slate-50",
+    border: "border-slate-200",
+    text: "text-slate-700",
+  },
+  refresh: [],
+  message: "No message needed.",
+  pattern_assessment: null,
+};
+
+const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emptyActiveCase;
+  React.useEffect(() => {
+  if (!cases.length) {
+    setActiveCaseId(null);
+    return;
+  }
+
+  const activeStillExists = cases.some((item) => item.id === activeCaseId);
+
+  if (!activeStillExists) {
+    setActiveCaseId(cases[0].id);
+  }
+}, [cases, activeCaseId]);
   if (typeof window !== "undefined") {
   window.cases = cases;
   window.debugCases = () => {
@@ -324,6 +357,7 @@ React.useEffect(() => {
   };
 
   const getShortActionPhrase = (item, status = "active", caseId = null) => {
+    if (!item) return "No active case";
     if (status === "pending") return pendingSubStatus[caseId] || "Awaiting MD response";
     if (status === "resolved") {
       if (["VERIFY AS ENTERED", "NONE"].includes(item.lane)) return "Verify as entered";
@@ -442,6 +476,13 @@ React.useEffect(() => {
   };
 
   const getQueueSignal = (item) => {
+    if (!item) {
+  return {
+    label: "NO ACTIVE CASE",
+    tone: "slate",
+    helper: "No case is currently selected.",
+  };
+}
     if (item?.pattern_assessment === "Pattern-questionable") return { label: "VERIFY - FOLLOW-UP", tone: "amber" };
     if (item.lane === "CHALLENGE") return { label: "HOLD NOW", tone: "red" };
     if (["CLARIFY USE", "COMPLETE"].includes(item.lane)) return { label: "ADDRESS DURING WORKFLOW", tone: "amber" };
@@ -449,6 +490,13 @@ React.useEffect(() => {
   };
 
   const getVisibleHeaderState = (item, status) => {
+    if (!active) {
+  return {
+    title: "No active case",
+    subtitle: "Select a case from the queue.",
+    tone: "slate",
+  };
+}
     if (status === "pending") {
       return {
         label: "PENDING",
@@ -1332,43 +1380,7 @@ React.useEffect(() => {
   if (!prescriptionInput.trim()) return;
 
   setInputFeedback({ type: "loading", message: "Analyzing..." });
-  const handleClearCompletedCases = () => {
-  const completedIds = new Set(
-    queueEntries
-      .filter((entry) =>
-        getQueueBucket(entry) === "VERIFIED / NO ISSUE" ||
-        getQueueBucket(entry) === "RESOLVED"
-      )
-      .map((entry) => entry.item.id)
-  );
-
-  if (completedIds.size === 0) return;
-
-  setCases((prev) => prev.filter((item) => !completedIds.has(item.id)));
-
-  setCaseStatuses((prev) => {
-    const next = { ...prev };
-    completedIds.forEach((id) => delete next[id]);
-    return next;
-  });
-
-  setNotesById((prev) => {
-    const next = { ...prev };
-    completedIds.forEach((id) => delete next[id]);
-    return next;
-  });
-
-  setSourceRefById((prev) => {
-    const next = { ...prev };
-    completedIds.forEach((id) => delete next[id]);
-    return next;
-  });
-
-  if (activeCaseId && completedIds.has(activeCaseId)) {
-    const nextActive = cases.find((item) => !completedIds.has(item.id));
-    setActiveCaseId(nextActive?.id || null);
-  }
-};
+  
 
   try {
     const response = await fetch("http://localhost:8000/analyze", {
@@ -1670,6 +1682,7 @@ window.debugBucketAudit = () => {
   const [pendingSavingById, setPendingSavingById] = React.useState({});
   const [resolvedButtonById, setResolvedButtonById] = React.useState({});
   const [actionFlashByKey, setActionFlashByKey] = React.useState({});
+  const [clearingCaseIds, setClearingCaseIds] = React.useState(new Set());
 const handleClearCompletedCases = () => {
   const completedIds = new Set(
     queueEntries
@@ -1682,13 +1695,34 @@ const handleClearCompletedCases = () => {
 
   if (completedIds.size === 0) return;
 
-  setCases((prev) => prev.filter((item) => !completedIds.has(item.id)));
+  if (completedIds.size > 5) {
+    const confirmed = window.confirm(
+      `Clear ${completedIds.size} completed cases?`
+    );
 
-  setCaseStatuses((prev) => {
-    const next = { ...prev };
-    completedIds.forEach((id) => delete next[id]);
-    return next;
-  });
+    if (!confirmed) return;
+  }
+
+  setClearingCaseIds(completedIds);
+
+  setTimeout(() => {
+    setCases((prev) => prev.filter((item) => !completedIds.has(item.id)));
+
+    setCaseStatuses((prev) => {
+      const next = { ...prev };
+      completedIds.forEach((id) => delete next[id]);
+      return next;
+    });
+
+    setActiveCaseId((prevActiveId) => {
+      if (!completedIds.has(prevActiveId)) return prevActiveId;
+
+      const nextActive = cases.find((item) => !completedIds.has(item.id));
+      return nextActive?.id || null;
+    });
+
+    setClearingCaseIds(new Set());
+  }, 250);
 };
   const readyToSendMessage = active
     ? buildReadyToSendMessage(active, activeStatus)
@@ -1861,13 +1895,7 @@ const handleClearCompletedCases = () => {
               >
                 Analyze
               </button>
-              <button
-                type="button"
-                onClick={handleClearCompletedCases}
-                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
-              >
-                Clear Completed Cases
-              </button>
+              
             </div>
             <div className="mt-3">
               <button
@@ -1930,7 +1958,11 @@ const handleClearCompletedCases = () => {
                         type="button"
                         key={`${item.title}-${idx}`}
                         onClick={() => setActiveCaseId(item.id)}
-                        className={`w-full rounded-xl border p-3 text-left transition ${
+                        className={`w-full rounded-xl border p-3 text-left transition-all duration-300 ease-in-out ${
+                          clearingCaseIds.has(item.id)
+                            ? "opacity-0 translate-y-2 scale-[0.98] pointer-events-none"
+                            : "opacity-100 translate-y-0 scale-100"
+                        } ${
                           group.title === "VERIFIED/ISSUE"
                             ? isActive
                               ? "border-sky-400 bg-sky-100/70 text-sky-900"
@@ -2241,15 +2273,18 @@ const handleClearCompletedCases = () => {
         </main>
 
         <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:overflow-auto">
-          <div className="mb-4 flex items-center justify-between">
-  <div>
-    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Completed</div>
-    <h2 className="text-xl font-semibold">Cleared Cases</h2>
-  </div>
+          <div className="mb-4">
+  <h2 className="text-xl font-semibold text-slate-900">
+  Completed Cases
+</h2>
 
-  <button onClick={handleClearCompletedCases}>
-    Clear
-  </button>
+  <button
+  type="button"
+  onClick={handleClearCompletedCases}
+  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+>
+  Clear Cases
+</button>
 </div>
 
           <div className="space-y-4">
