@@ -387,6 +387,11 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                 daily_dose = None
 
             if daily_dose and quantity > daily_dose * 5 and no_explicit_duration:
+                # Set prescriber_message before CasePattern call
+                if "ibuprofen" in drug.lower() and any(term in sig.lower() for term in ["prn", "as needed"]):
+                    prescriber_message = ""
+                else:
+                    prescriber_message = f"Quantity of {quantity} creates inconsistency with directions suggesting {daily_dose} doses daily. Please confirm intended duration and total exposure."
                 return CasePattern(
                     name="episodic_short_regimen_large_quantity",
                     structural_issue=f"Quantity and directions imply a duration that conflicts with intended course length, creating uncertainty about total exposure.",
@@ -398,7 +403,7 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                         "Clarification needed for intended duration and whether repeated use is appropriate.",
                     ],
                     refresh_conclusion=f"Quantity ({quantity}) and directions suggest {quantity / daily_dose:.1f}-day course; verify intended duration and total exposure.",
-                    prescriber_message=f"Quantity of {quantity} creates inconsistency with directions suggesting {daily_dose} doses daily. Please confirm intended duration and total exposure.",
+                    prescriber_message=prescriber_message,
                     internal_message=f"Quantity ({quantity}) implies {quantity / daily_dose:.1f} days at {daily_dose} doses/day; duration verification needed.",
                     documentation_template=f"Prescription written for {drug}, {sig}, quantity {quantity}. Quantity implies {quantity / daily_dose:.1f}-day course at {daily_dose} doses/day.",
                 )
@@ -571,7 +576,10 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                 (doses_per_day == 3 and quantity in [84, 90])
             )
 
-            # Only emit an issue if a real mismatch, ambiguity, or uncertainty is detected
+            # PRN/as-needed SIG guard: suppress quantity mismatch prescriber message for PRN/as-needed SIGs
+            prn_terms = ["prn", "as needed", "as-needed", "when needed"]
+            is_prn_sig = any(term in sig_lower for term in prn_terms)
+            # Only emit a prescriber message for non-PRN SIGs
             if (
                 duration_mismatch
                 or single_dose_excess
@@ -583,6 +591,13 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                 structural_issue_text = "Quantity and directions imply a duration that may be inconsistent with intended course length."
                 if unusually_long:
                     structural_issue_text = f"Quantity implies an unusually long course ({implied_duration_days:.1f} days) that conflicts with current directions."
+                prescriber_message = (
+                    f"Quantity of {quantity} creates inconsistency with directions suggesting {expected_daily_dose} doses daily. Please confirm intended duration and total exposure."
+                    if not is_prn_sig else ""
+                )
+                if has_prn:
+                    return None
+                
                 return CasePattern(
                     name="quantity_sig_consistency",
                     structural_issue=structural_issue_text,
@@ -594,7 +609,7 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                         "Quantity-frequency mismatch creates uncertainty about intended course length and needs clarification.",
                     ],
                     refresh_conclusion=f"Quantity ({quantity}) and directions suggest {implied_duration_days:.1f}-day course; verify intended duration and total exposure.",
-                    prescriber_message=f"Quantity of {quantity} creates inconsistency with directions suggesting {expected_daily_dose} doses daily. Please confirm intended duration and total exposure.",
+                    prescriber_message=prescriber_message,
                     internal_message=f"Quantity ({quantity}) implies {implied_duration_days:.1f} days at {expected_daily_dose} doses/day; duration verification needed.",
                     documentation_template=f"Prescription written for {drug}, {sig}, quantity {quantity}. Quantity implies {implied_duration_days:.1f}-day course at {expected_daily_dose} doses/day.",
                 )

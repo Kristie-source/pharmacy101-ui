@@ -519,17 +519,28 @@ def detect_extended_course_without_context(parsed) -> Optional[PatternResult]:
         or any(drug_matches_base_name(drug, drug_name) for drug_name in CONTINUOUS_USE_DRUGS)
     )
     
-    # Check if it's a flexible non-structured PRN (should be excluded)
+       # Check if it's a flexible non-structured PRN (should be excluded)
     is_structured_prn_drug = any(
         drug_matches_base_name(drug, drug_name) for drug_name in STRUCTURED_PRN_DRUGS
     )
+
+    is_prn_interval_frequency = frequency in [
+        "every 4 hours",
+        "every 6 hours",
+        "every 8 hours",
+        "every 12 hours",
+        "q4h",
+        "q6h",
+        "q8h",
+        "q12h",
+    ]
+
     is_flexible_nonstructured_prn = (
         has_prn
         and no_explicit_duration
-        and frequency in ["daily", "once daily"]
+        and (frequency in ["daily", "once daily"] or is_prn_interval_frequency)
         and not is_structured_prn_drug
     )
-    
     # Standard scheduled maintenance frequencies (not episodic or event-based)
     standard_maintenance_frequencies = [
         "daily", "once daily", "twice daily", "three times daily", "four times daily",

@@ -442,10 +442,14 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
             "Missing dose amount in SIG. Include a dose amount such as '1t', '1 tab', or '2 tabs'."
         )
     
-    # Parse frequency from SIG
+       # Parse frequency from SIG
     frequency = parse_frequency(sig)
+
     if not frequency and _is_single_dose_structure(sig):
         frequency = "single dose"
+
+    if not frequency and _is_event_based_prn_structure(sig):
+        frequency = "event-based PRN"
 
     if not frequency and structure_pattern.requires_frequency:
         raise ValueError(
@@ -461,4 +465,92 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
         structure_pattern=structure_pattern.pattern_name,
         structure_complete=structure_pattern.structurally_complete,
         structure_missing=structure_pattern.missing_elements,
+    )
+def _is_event_based_prn_structure(sig: str) -> bool:
+    sig_lower = sig.lower()
+
+    event_based_terms = [
+        "at onset",
+        "onset of migraine",
+        "at first sign",
+        "for migraine",
+        "migraine",
+        "may repeat",
+        "as needed",
+        "prn",
+    ]
+
+    return any(term in sig_lower for term in event_based_terms)
+
+def generate_ready_to_send_message(drug: str, sig: str, quantity: int | str, issue_text: str = "") -> str:
+    """
+    Creates concise pharmacist-to-prescriber clarification messages.
+    Avoids vague language like 'may benefit from documentation.'
+    """
+
+    drug_lower = drug.lower()
+    sig_lower = sig.lower()
+    issue_lower = issue_text.lower()
+
+    # Quantity exceeds single-dose regimen
+    if "once" in sig_lower and str(quantity).isdigit() and int(quantity) > 2:
+        return (
+            "The quantity exceeds a single-dose regimen. "
+            "Please confirm if additional dosing is intended, such as repeat dosing or partner therapy."
+        )
+
+    # Migraine / triptan missing repeat limits
+    if any(term in drug_lower for term in ["sumatriptan", "rizatriptan", "zolmitriptan", "naratriptan", "eletriptan"]):
+        if "may repeat" in sig_lower and not any(term in sig_lower for term in ["max", "maximum", "24 hours", "per day"]):
+            return (
+                "Repeat dosing limits are incomplete. "
+                "Please confirm the repeat interval and maximum daily dose."
+            )
+
+    # Metoprolol tartrate once daily
+    if "metoprolol tartrate" in drug_lower and any(term in sig_lower for term in ["daily", "once daily", "qd"]):
+        return (
+            "The dosing schedule may not align with the intended formulation. "
+            "Please confirm whether metoprolol tartrate once daily is intended or if a different formulation/frequency was meant."
+        )
+
+    # Quantity/duration mismatch
+    if any(term in issue_lower for term in ["quantity mismatch", "qty mismatch", "quantity does not match", "math mismatch"]):
+        return (
+            "The quantity does not match the written directions and duration. "
+            "Please confirm the intended quantity or treatment length."
+        )
+
+    # Missing duration
+    if any(term in issue_lower for term in ["missing duration", "duration missing", "treatment length"]):
+        return (
+            "Treatment duration is not specified. "
+            "Please confirm the intended length of therapy."
+        )
+
+    # PRN missing max dose
+    if any(term in sig_lower for term in ["prn", "as needed"]) and not any(term in sig_lower for term in ["max", "maximum", "per day", "24 hours"]):
+        return (
+            "As-needed dosing limits are incomplete. "
+            "Please confirm the maximum daily dose or use limit."
+        )
+
+    # Conflicting regimen
+    if any(term in issue_lower for term in ["conflicting", "multiple regimens", "scheduled and prn"]):
+        return (
+            "The directions contain conflicting use patterns. "
+            "Please confirm the intended regimen so the patient receives one clear set of instructions."
+        )
+
+    # Indication needed
+    if any(term in issue_lower for term in ["indication", "intent"]):
+        return (
+            "Indication is needed to confirm the intended dosing pattern. "
+            "Please confirm what this medication is being used to treat."
+        )
+
+    # Fallback: still specific, not vague
+    return (
+        "The directions are unclear as written. "
+        "Please confirm the intended dosing instructions."
     )
