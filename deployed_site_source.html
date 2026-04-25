@@ -347,7 +347,7 @@ function Pharmacy101ExtensionMockup() {
 
     const lane = item.lane;
 
-    // VERIFY — no confidence displayed
+    // VERIFY ï¿½ no confidence displayed
     if (lane === "VERIFY AS ENTERED" || lane === "NONE") return null;
 
     const structural = (item.structural || "").toLowerCase();
@@ -362,7 +362,7 @@ function Pharmacy101ExtensionMockup() {
     const minor_issue         = structural.includes("minor");
     const borderline_hold     = (lane === "CLARIFY USE" || lane === "COMPLETE") && item.affects === "duration";
 
-    // HOLD lane (CHALLENGE) — red palette
+    // HOLD lane (CHALLENGE) ï¿½ red palette
     // HIGH: contradiction, not followable, or high-impact missing | bold, full opacity
     // MEDIUM: still HOLD but less clearly critical     | medium weight, ~85% opacity
     // LOW: not used for HOLD
@@ -378,7 +378,7 @@ function Pharmacy101ExtensionMockup() {
       };
     }
 
-    // ADDRESS lane (CLARIFY USE, COMPLETE) — amber palette
+    // ADDRESS lane (CLARIFY USE, COMPLETE) ï¿½ amber palette
     // HIGH: borderline-hold concern             | bold, full opacity
     // MEDIUM: clear need for clarification      | medium weight, ~88% opacity
     // LOW: minor issue / low-risk ambiguity     | normal weight, ~65% opacity
@@ -566,7 +566,7 @@ function Pharmacy101ExtensionMockup() {
     const isAzithromycin      = /azithromycin|z-?pak|zpack/.test(textLower);
     const isPackageCourse     = /z-?pak|zpack|dosepak|dose pack|starter pack|medrol|pak/i.test(rawText || "");
     const hasTaper            = /\bthen\b|taper|decrease|reduce/.test(sigLower);
-    const hasDaySequence      = /day\s*1|days?\s*2\s*[-–]\s*5|for\s*5\s*days/.test(sigLower);
+    const hasDaySequence      = /day\s*1|days?\s*2\s*[-ï¿½]\s*5|for\s*5\s*days/.test(sigLower);
     const hasCountTransition  = /2\s+tablets?.*1\s+tablet|500\s*mg.*250\s*mg/.test(textLower);
     const azithromycinQtyMismatch = isAzithromycin && Number.isFinite(qty) && qty !== 6;
     const packageWithoutStructure = isPackageCourse && !hasDaySequence && !hasCountTransition && !hasTaper;
@@ -610,11 +610,11 @@ function Pharmacy101ExtensionMockup() {
     // -- ADDRESS: safe but imperfect ----------------------------------
     // Cleared all HOLD checks. Prescription is executable as written
     // but has at least one minor gap. Five named ADDRESS patterns:
-    //   A1: nonStandardFreq  — unusual but explicitly stated frequency
-    //   A2: missingRoute     — dose + schedule present; route inferrable
-    //   A3: likelyStandard   — known chronic agent with interpretable sig
-    //   A4: lowRiskPrnClear  — PRN with max dose stated, no conflict
-    //   A5: coreSigPresent   — has dose and frequency in imperfect form
+    //   A1: nonStandardFreq  ï¿½ unusual but explicitly stated frequency
+    //   A2: missingRoute     ï¿½ dose + schedule present; route inferrable
+    //   A3: likelyStandard   ï¿½ known chronic agent with interpretable sig
+    //   A4: lowRiskPrnClear  ï¿½ PRN with max dose stated, no conflict
+    //   A5: coreSigPresent   ï¿½ has dose and frequency in imperfect form
     const nonStandardFreq  = /every\s+\d+\s*(h|hr|hour)s?\b/.test(sigLower) &&
                              !/every\s+(4|6|8|12|24)\s*(h|hr|hour)s?\b/.test(sigLower);
     const weeklyWithAnchor = /twice\s+weekly|three\s+times\s+weekly|2x\s*(?:per\s*)?week|3x\s*(?:per\s*)?week/.test(sigLower);
@@ -625,7 +625,7 @@ function Pharmacy101ExtensionMockup() {
     const coreSigPresent   = (hasScheduled || hasPrn) && /\d/.test(sigLower); // A5
 
     if (nonStandardFreq || weeklyWithAnchor || missingRoute || likelyStandard || lowRiskPrnClear || coreSigPresent) {
-      return "ADDRESS"; // A1–A5: safe but imperfect
+      return "ADDRESS"; // A1ï¿½A5: safe but imperfect
     }
     return "ADDRESS"; // fallback: cleared HOLD, did not reach VERIFY
   };
@@ -741,7 +741,7 @@ function Pharmacy101ExtensionMockup() {
       const isPackageCourse = /z-?pak|zpack|dosepak|dose pack|starter pack|medrol|pak/i.test(rawText || "");
       const isAzithromycinPackage = /azithromycin|z-?pak|zpack/.test(textLower);
       const hasTaperStructure = /\bthen\b|taper|decrease|reduce/.test(sigLower);
-      const hasExplicitDaySequence = /day\s*1|days?\s*2\s*[-–]\s*5|for\s*5\s*days/.test(sigLower);
+      const hasExplicitDaySequence = /day\s*1|days?\s*2\s*[-ï¿½]\s*5|for\s*5\s*days/.test(sigLower);
       const hasTabletCountTransition = /2\s+tablets?.*1\s+tablet|500\s*mg.*250\s*mg/.test(textLower);
       const azithromycinPackageQtyMismatch = isAzithromycinPackage && Number.isFinite(qty) && qty !== 6;
       const azithromycinPackagePatternMismatch = isAzithromycinPackage && !hasExplicitDaySequence && !hasTabletCountTransition;
@@ -873,10 +873,10 @@ function Pharmacy101ExtensionMockup() {
     }
 
     const fallbackAddressReason = getAddressReason();
-    if (!fallbackAddressReason) {
-      return {
-        lane: "VERIFY AS ENTERED",
-        structural: "No obvious structural issue detected.",
+if (!fallbackAddressReason && item?.pattern_assessment !== "Pattern-questionable") {
+  return {
+    lane: "VERIFY AS ENTERED",
+    structural: "No obvious structural issue detected.",
         affects: "none",
         clarification: "Unlikely",
         resolution: verifyResolution,
@@ -1363,7 +1363,7 @@ function Pharmacy101ExtensionMockup() {
                 className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
               >
                 {pendingButtonById[active?.id]
-                  ? "Pending…"
+                  ? "Pendingï¿½"
                   : "Mark Pending"}
               </button>
               <button

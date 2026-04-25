@@ -194,7 +194,7 @@ def evaluate_regimen_pattern(
     pattern_dispensing_risk = bool(entry.get("pattern_questionable_dispensing_risk", False))
     immediate_usability = "NO" if pattern_dispensing_risk else "YES"
     workflow_status = "HOLD NOW" if pattern_dispensing_risk else "Verified — Needs Follow-up"
-    resolution = "🟠 CLARIFY USE" if pattern_dispensing_risk else "🔴 CHALLENGE"
+    resolution = "🔴 CHALLENGE" if pattern_dispensing_risk else "🟠 CLARIFY USE"
 
     return RegimenPatternAssessment(
         pattern_context_supported=True,

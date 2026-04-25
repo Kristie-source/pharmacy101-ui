@@ -292,6 +292,15 @@
   };
 
   const renderResult = (data) => {
+    setFeedback("RENDER HIT");
+    
+    console.log("RENDER DATA:", {
+      lane: data.lane,
+      history_match_type: data.history_match_type,
+      last_status: data.last_status,
+      pattern_assessment: data.pattern_assessment
+});
+
     latestAnalysisData = data;
     const historyMatchType = String(data.history_match_type || "").trim().toUpperCase();
     const laneValue = String(data.lane || "").trim().toUpperCase();
@@ -406,6 +415,8 @@
           prescriber_id: latestAnalyzeRequestContext.prescriber_id,
         }),
       });
+
+      console.log("RESPONSE STATUS:", response.status);
 
       const data = await response.json();
       if (!response.ok || data.status === "INVALID") {

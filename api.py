@@ -418,7 +418,7 @@ def analyze(input: PrescriptionInput):
         qty=parsed.quantity,
     )
 
-    lane = "INTERRUPTIVE" if has_structural_trigger else "NONE"
+    lane = "INTERRUPTIVE" if (has_structural_trigger and structural.pattern_assessment != "Pattern-questionable") else "NONE"
     history_match_type = "NONE"
     history_match_confidence = "NONE"
     seen_before_context = None

@@ -162,7 +162,7 @@ def classify_pattern(pattern: PatternResult) -> ClassificationResult:
     }
 
     defaults = {
-        "resolution": "🔴 CHALLENGE",
+        "resolution": "🟠 CLARIFY USE",
         "safe_to_verify": "🟢 SAFE",
         "follow_up_need": "🟡 MESSAGE RECOMMENDED",
         "action": "Question pattern",

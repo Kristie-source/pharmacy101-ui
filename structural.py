@@ -138,7 +138,7 @@ def _build_pattern_questionable_result(
         drug_recognition_match=recognition_match,
         risk_severity=risk_severity,
         immediate_usability=immediate_usability,
-        workflow_status=workflow_status,
+        workflow_status="CLARIFY USE",
         structure_assessment="Structurally complete",
         pattern_assessment="Pattern-questionable",
         pattern_issue=pattern_issue,
