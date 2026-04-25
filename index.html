@@ -1332,6 +1332,43 @@ React.useEffect(() => {
   if (!prescriptionInput.trim()) return;
 
   setInputFeedback({ type: "loading", message: "Analyzing..." });
+  const handleClearCompletedCases = () => {
+  const completedIds = new Set(
+    queueEntries
+      .filter((entry) =>
+        getQueueBucket(entry) === "VERIFIED / NO ISSUE" ||
+        getQueueBucket(entry) === "RESOLVED"
+      )
+      .map((entry) => entry.item.id)
+  );
+
+  if (completedIds.size === 0) return;
+
+  setCases((prev) => prev.filter((item) => !completedIds.has(item.id)));
+
+  setCaseStatuses((prev) => {
+    const next = { ...prev };
+    completedIds.forEach((id) => delete next[id]);
+    return next;
+  });
+
+  setNotesById((prev) => {
+    const next = { ...prev };
+    completedIds.forEach((id) => delete next[id]);
+    return next;
+  });
+
+  setSourceRefById((prev) => {
+    const next = { ...prev };
+    completedIds.forEach((id) => delete next[id]);
+    return next;
+  });
+
+  if (activeCaseId && completedIds.has(activeCaseId)) {
+    const nextActive = cases.find((item) => !completedIds.has(item.id));
+    setActiveCaseId(nextActive?.id || null);
+  }
+};
 
   try {
     const response = await fetch("http://localhost:8000/analyze", {
@@ -1526,6 +1563,50 @@ React.useEffect(() => {
   };
 
   const queueEntries = cases.map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }));
+  const getQueueBucket = (entry) => {
+  const item = entry.item;
+
+  if (entry.status === "pending") return "PENDING";
+  if (entry.status === "resolved") return "RESOLVED";
+
+  if (entry.status !== "active") return "REVIEW";
+
+  if (
+    item.lane === "CHALLENGE" &&
+    item?.pattern_assessment !== "Pattern-questionable"
+  ) {
+    return "HOLD NOW";
+  }
+
+  if (
+    ["CLARIFY USE", "COMPLETE", "INTERRUPTIVE"].includes(item.lane) ||
+    item?.pattern_assessment === "Pattern-questionable"
+  ) {
+    return "ADDRESS DURING WORKFLOW";
+  }
+
+  if (isVerifiedFollowUpPending(item)) {
+    return "VERIFIED/ISSUE";
+  }
+
+  if (isFullyClearVerified(item)) {
+    return "VERIFIED / NO ISSUE";
+  }
+
+  return "REVIEW";
+};
+window.debugBucketAudit = () => {
+  const rows = queueEntries.map((entry) => ({
+    id: entry.item.id,
+    title: entry.item.title,
+    lane: entry.item.lane,
+    status: entry.status,
+    bucket: getQueueBucket(entry),
+  }));
+
+  console.table(rows);
+  return rows;
+};
 
   const workflowGroups = [
     {
@@ -1589,7 +1670,26 @@ React.useEffect(() => {
   const [pendingSavingById, setPendingSavingById] = React.useState({});
   const [resolvedButtonById, setResolvedButtonById] = React.useState({});
   const [actionFlashByKey, setActionFlashByKey] = React.useState({});
+const handleClearCompletedCases = () => {
+  const completedIds = new Set(
+    queueEntries
+      .filter((entry) => {
+        const bucket = getQueueBucket(entry);
+        return bucket === "VERIFIED / NO ISSUE" || bucket === "RESOLVED";
+      })
+      .map((entry) => entry.item.id)
+  );
 
+  if (completedIds.size === 0) return;
+
+  setCases((prev) => prev.filter((item) => !completedIds.has(item.id)));
+
+  setCaseStatuses((prev) => {
+    const next = { ...prev };
+    completedIds.forEach((id) => delete next[id]);
+    return next;
+  });
+};
   const readyToSendMessage = active
     ? buildReadyToSendMessage(active, activeStatus)
     : "";
@@ -1760,6 +1860,13 @@ React.useEffect(() => {
                 className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
               >
                 Analyze
+              </button>
+              <button
+                type="button"
+                onClick={handleClearCompletedCases}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+              >
+                Clear Completed Cases
               </button>
             </div>
             <div className="mt-3">
@@ -2135,13 +2242,18 @@ React.useEffect(() => {
 
         <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:overflow-auto">
           <div className="mb-4 flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Completed</div>
-              <h2 className="text-xl font-semibold">Cleared Cases</h2>
-            </div>
-          </div>
+  <div>
+    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Completed</div>
+    <h2 className="text-xl font-semibold">Cleared Cases</h2>
+  </div>
+
+  <button onClick={handleClearCompletedCases}>
+    Clear
+  </button>
+</div>
 
           <div className="space-y-4">
+           
             {completedGroups.map((group) => (
               <section key={group.title} className={`rounded-2xl border p-3 ${group.accent}`}>
                 <h2 className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-700">
