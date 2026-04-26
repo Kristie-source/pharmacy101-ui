@@ -1,3 +1,4 @@
+from patterns import is_pattern_safe_drug
 import re
 from models import ParsedPrescription
 from typing import Optional
@@ -389,16 +390,19 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
     if not drug:
         raise ValueError("Could not identify the drug segment before SIG directions.")
 
-    # Require an explicit drug strength in the drug segment.
+    # Require an explicit drug strength in the drug segment unless drug is pattern-safe.
     # A strength must contain a numeric value followed by a mass/volume unit.
     strength_pattern = re.compile(
         r"\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|gm|grams?|milligrams?|micrograms?|mEq|units?|IU|ml|mL)\b",
         re.IGNORECASE,
     )
     if not strength_pattern.search(drug):
-        raise ValueError(
-            "Missing drug strength. When drug name, SIG, and quantity are present, strength is required (for example, 500 mg or 1 g)."
-        )
+        if not is_pattern_safe_drug(drug):
+            raise ValueError(
+                "Missing drug strength. When drug name, SIG, and quantity are present, strength is required (for example, 500 mg or 1 g)."
+            )
+        # Optionally: add a low-priority note that strength was not supplied, but analysis continued
+        # (Implementation of note is context-dependent; here, just pass)
 
     _validate_enhanced_drug_identity(drug)
     _validate_known_strength_for_recognized_medication(drug)

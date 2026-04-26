@@ -1,3 +1,14 @@
+# List of drugs for which strength is not required for structural analysis (pattern-safe drugs)
+PATTERN_SAFE_DRUGS = [
+    "albuterol inhaler", "levalbuterol inhaler", "fluticasone inhaler", "budesonide inhaler", "epinephrine autoinjector", "epipen", "naloxone nasal spray", "naloxone autoinjector", "sumatriptan pack", "methylprednisolone dose pack", "medrol dose pack", "contraceptive pack", "norelgestromin patch", "nicotine patch", "testosterone gel pack", "insulin pen", "insulin cartridge", "insulin vial", "glucagon kit", "glucagon emergency kit"
+]
+
+def is_pattern_safe_drug(drug: str) -> bool:
+    normalized = normalize_drug_name(drug)
+    for safe in PATTERN_SAFE_DRUGS:
+        if safe in normalized:
+            return True
+    return False
 import re
 from typing import Optional
 
@@ -136,6 +147,9 @@ def _is_single_dose_structure(sig: str, frequency: Optional[str]) -> bool:
 
 
 def _extract_strength_components(drug: str) -> Optional[tuple[float, str, float]]:
+    # If drug is in pattern-safe list, skip strength extraction (not required)
+    if is_pattern_safe_drug(drug):
+        return None
     match = re.search(
         r"\b(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>mg|mcg|g|gm)\b",
         str(drug or ""),
@@ -270,17 +284,36 @@ def detect_prn_scheduled_conflict(drug: str, sig: str, frequency: Optional[str])
     has_prn = "prn" in sig_lower or "as needed" in sig_lower
     has_fixed_schedule = _is_fixed_scheduled_frequency(frequency, sig)
 
-    if has_prn and has_fixed_schedule:
-        return PatternResult(
-            pattern_name="prn_scheduled_conflict",
-            structural_issue=(
-                f"PRN use is combined with {frequency} frequency, making it unclear whether the "
-                "order is intended for ongoing scheduled use or episodic use."
-            ),
-            affects="instructions",
-            clarification="Context-dependent",
-        )
+    # Detect mixed scheduled + separate PRN regimens (e.g., 'take 1 tablet three times daily and 1 tablet as needed')
+    split_regex = r"(?:\band\b|;|\n|\r)"
+    instructions = [s.strip() for s in re.split(split_regex, sig_lower) if s.strip()]
+    if len(instructions) > 1:
+        scheduled_found = False
+        prn_found = False
+        for instr in instructions:
+            instr_has_prn = "prn" in instr or "as needed" in instr
+            instr_has_schedule = _is_fixed_scheduled_frequency(frequency, instr)
+            # Accept bounded PRN (e.g., 'three times daily as needed')
+            if instr_has_prn and instr_has_schedule:
+                continue
+            elif instr_has_prn:
+                prn_found = True
+            elif instr_has_schedule:
+                scheduled_found = True
+        # If both a separate scheduled and a separate PRN instruction are found, flag as mixed regimen
+        if scheduled_found and prn_found:
+            return PatternResult(
+                pattern_name="scheduled_plus_separate_prn_conflict",
+                structural_issue="Directions contain both scheduled and separate as-needed dosing, creating two possible use patterns.",
+                affects="schedule",
+                clarification="Likely",
+            )
+        # Otherwise, treat as valid bounded PRN
+        return None
 
+    # If PRN and frequency are part of the same instruction (e.g., 'twice daily as needed', 'every 6 hours as needed'), treat as valid bounded PRN
+    if has_prn and has_fixed_schedule:
+        return None
     return None
 
 
