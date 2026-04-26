@@ -200,7 +200,7 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
 
   const refreshAuditMeta = React.useCallback(async () => {
     try {
-      const response = await fetch("http://localhost:8000/audit/meta");
+      const response = await fetch("http://127.0.0.1:8001/audit/meta");
       if (!response.ok) {
         setAuditCount(0);
         return;
@@ -220,7 +220,7 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
     if (isExportingAudit || auditCount <= 0) return;
     setIsExportingAudit(true);
     try {
-      const response = await fetch("http://localhost:8000/audit/export.csv");
+      const response = await fetch("http://127.0.0.1:8001/audit/export.csv");
       if (!response.ok) {
         throw new Error("Export failed");
       }
@@ -716,10 +716,13 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
   const getQuickRationale = (item) => {
     const isVerifyLane = ["VERIFY AS ENTERED", "NONE"].includes(String(item?.lane || "").toUpperCase());
 
-    const typical = getRefreshLineByPrefix(item, ["pattern focus:", "common pattern:"]) ||
-      (isVerifyLane
-        ? "Directions are followable and structurally complete for routine verification."
-        : "Expected pattern includes clear boundaries for dose, duration, and use triggers.");
+    const typical =
+  getRefreshLineByPrefix(item, ["pattern focus:", "common pattern:"]) ||
+  getFirstSentence(String(item?.pattern || "").trim()) ||
+  getFirstSentence(String(item?.pattern_assessment || "").trim()) ||
+  (isVerifyLane
+    ? "Directions are followable and structurally complete for routine verification."
+    : "Formulation, schedule, quantity, and use boundaries should align clearly.");
 
     const deviation = getRefreshLineByPrefix(item, ["why this stands out:"]) ||
       getFirstSentence(String(item?.issue_line || "").trim()) ||
@@ -1380,10 +1383,9 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
   if (!prescriptionInput.trim()) return;
 
   setInputFeedback({ type: "loading", message: "Analyzing..." });
-  
 
   try {
-    const response = await fetch("http://localhost:8000/analyze", {
+    const response = await fetch("http://127.0.0.1:8001/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1392,83 +1394,87 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
       }),
     });
 
-    const data = await response.json();
-
-    if (data.status === "INVALID") {
-      setInputFeedback({ type: "invalid", message: data.error });
-      return;
+    if (!response.ok) {
+      throw new Error("Analyze request failed");
     }
 
-    // Map API resolution to your UI format
-    const laneMap = {
-      "🔴 CHALLENGE": "CHALLENGE",
-      "🟠 CLARIFY USE": "CLARIFY USE",
-      "🟡 COMPLETE": "COMPLETE",
-      "🟢 NONE": "VERIFY AS ENTERED",
-    };
+    const data = await response.json();
+    console.log("BACKEND RESULT:", data);
 
-    const resolutionMap = {
-      "🔴 CHALLENGE": {
-        label: "CHALLENGE", emoji: "🔴",
-        bg: "bg-red-50", border: "border-red-300", text: "text-red-900"
-      },
-      "🟠 CLARIFY USE": {
-        label: "CLARIFY USE", emoji: "🟠",
-        bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-900"
-      },
-      "🟡 COMPLETE": {
-        label: "COMPLETE", emoji: "🟡",
-        bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-900"
-      },
-      "🟢 NONE": {
-        label: "NONE", emoji: "🟢",
-        bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-900"
-      },
-    };
 
-    const apiResolution = data.resolution || "🟢 NONE";
-    const mappedResolution = resolutionMap[apiResolution] || resolutionMap["🟢 NONE"];
+    const isHoldNow = data.action_level === "HOLD_NOW";
 
-    const newCase = {
-      title: data.drug,
-      analysis_id: data.analysis_id || null,
-      lane: laneMap[apiResolution] || "VERIFY AS ENTERED",
-      workflow_status: data.workflow_status || null,
-      pattern_assessment: data.pattern_assessment || null,
-      pattern_issue: data.pattern_issue || null,
-      sig: data.sig,
-      qty: data.quantity,
-      structural: data.structural_issue,
-      affects: data.affects,
-      clarification: data.clarification,
-      resolution: mappedResolution,
-      refresh: data.refresh_points || [],
-      message: data.prescriber_message,
-      issue_line: data.issue_line || null,
-      why_this_matters: data.why_this_matters || null,
-      action_line: data.action_line || null,
-      documentation: data.documentation,
-      override_risk: data.override_risk,
-      risk_score: data.risk_score,
-      ui_priority: data.ui_priority,
-      drug_recognition_status: data.drug_recognition_status,
-      drug_recognition_match: data.drug_recognition_match,
-      known_pattern_message: data.known_pattern_message || null,
-      seen_before_context: data.seen_before_context || null,
-      history_summary: data.history_summary || null,
-      pattern_key: data.pattern_key || null,
-    };
+const newCase = {
+  ...data,
+  id: data.analysis_id || Date.now(),
+  title: data.drug || "Prescription",
+  sig: data.sig || "",
 
-    const caseWithId = { ...newCase, id: `case-${Date.now()}` };
-    setCases((prev) => [...prev, caseWithId]);
-    setActiveCaseId(caseWithId.id);
-    setCaseStatuses((prev) => ({ ...prev, [caseWithId.id]: "active" }));
-    setSourceRefById((prev) => ({ ...prev, [caseWithId.id]: sourceRefInput }));
+  // 🔑 FIX: your UI expects qty, not just quantity
+  qty: data.quantity ?? "",
+  quantity: data.quantity ?? "",
+
+  // 🔑 FIX: use existing UI lane ("CHALLENGE"), not new one
+  lane: isHoldNow ? "CHALLENGE" : data.lane,
+
+  // 🔑 FIX: map backend → UI fields
+  structural:
+    data.clinical_check ||
+    data.structural_issue ||
+    data.issue_line ||
+    "",
+
+  affects: data.affects || "",
+  clarification: data.clarification || "",
+
+  // 🔑 FIX: message section (this was broken before)
+  message:
+  data.action_level === "HOLD_NOW" &&
+  String(data.drug || "").toLowerCase().includes("metoprolol tartrate")
+    ? "This order is written for metoprolol tartrate, which is the immediate-release formulation, dosed once daily. Please confirm whether the intended product is metoprolol succinate ER or whether the tartrate dosing frequency should be adjusted."
+    : data.prescriber_message ||
+      data.internal_message ||
+      data.threshold_reason ||
+      "Clarification required before verification.",
+
+  // 🔑 FIX: resolution object (UI expects object, not string)
+  resolution: {
+    label: isHoldNow ? "CHALLENGE" : data.action_label || "NONE",
+    emoji: data.badge || "",
+    bg: isHoldNow ? "bg-red-50" : "bg-slate-50",
+    border: isHoldNow ? "border-red-300" : "border-slate-200",
+    text: isHoldNow ? "text-red-900" : "text-slate-700",
+  },
+
+  // 🔑 FIX: clinical explanation section
+  refresh: [
+    data.pattern_assessment && data.pattern_assessment !== "Pattern not evaluated"
+      ? `Pattern: ${data.pattern_assessment}`
+      : "Pattern: Formulation and dosing frequency should align with expected administration patterns.",
+    data.deviation
+      ? `Why this stands out: ${data.deviation}`
+      : data.clinical_check
+        ? `Why this stands out: ${data.clinical_check}`
+        : "",
+    data.risk
+      ? `Why this matters: ${data.risk}`
+      : data.threshold_reason
+        ? `Why this matters: ${data.threshold_reason}`
+        : "",
+  ].filter(Boolean),
+
+  // keep these for consistency
+  action_badge: `${data.badge} ${data.action_label}`,
+  workflow_status: data.action_label,
+  ui_priority: `${data.badge} ${data.action_label}`,
+};
+
+    setCases((prev) => [newCase, ...prev]);
+    setActiveCaseId(newCase.id);
+    setInputFeedback({ type: "success", message: "Analysis added." });
     setPrescriptionInput("");
-    setSourceRefInput("");
-    setInputFeedback({ type: "clean", message: "Analysis complete." });
-    refreshAuditMeta();
-
+    // Removed duplicate and old local logic
+    return;
   } catch (err) {
     setInputFeedback({
       type: "invalid",
@@ -1597,9 +1603,13 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
     return "ADDRESS DURING WORKFLOW";
   }
 
-  if (isVerifiedFollowUpPending(item)) {
-    return "VERIFIED/ISSUE";
-  }
+ if (item.action_level === "HOLD_NOW") {
+  return "INTERRUPTIVE";
+}
+
+if (isVerifiedFollowUpPending(item)) {
+  return "VERIFIED/ISSUE";
+}
 
   if (isFullyClearVerified(item)) {
     return "VERIFIED / NO ISSUE";
@@ -1725,8 +1735,12 @@ const handleClearCompletedCases = () => {
   }, 250);
 };
   const readyToSendMessage = active
-    ? buildReadyToSendMessage(active, activeStatus)
-    : "";
+  ? String(
+      active.prescriber_message ||
+      active.message ||
+      "No prescriber clarification needed."
+    ).replace(/\s+/g, " ").trim()
+  : "";
 
   React.useEffect(() => {
     const textArea = readyToSendMessageRef.current;
@@ -1821,7 +1835,7 @@ const handleClearCompletedCases = () => {
 
     const analysisId = active?.analysis_id;
     if (analysisId) {
-      fetch(`http://localhost:8000/analysis/${analysisId}/event`, {
+      fetch(`http://127.0.0.1:8001analysis/${analysisId}/event`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2061,8 +2075,28 @@ const handleClearCompletedCases = () => {
             )}
 
             {(() => {
-                const rationale = getQuickRationale(active);
-                const summaryText = getFirstSentence(rationale.deviation) || "Deviation from typical pattern";
+                const clinicalCheck =
+  active.clinical_check ||
+  active.structural ||
+  "No clinical check available.";
+
+const patternText =
+  active.pattern ||
+  active.pattern_line ||
+  "Formulation, schedule, quantity, and use boundaries should align clearly.";
+
+const deviationText =
+  active.deviation ||
+  active.structural ||
+  "No meaningful deviation detected.";
+
+const riskText =
+  active.risk ||
+  active.override_risk ||
+  active.threshold_reason ||
+  "No material risk identified.";
+
+const summaryText = getFirstSentence(clinicalCheck);
 
                 return (
                   <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
@@ -2078,9 +2112,9 @@ const handleClearCompletedCases = () => {
                         </div>
                       </summary>
                       <div className="mt-2 space-y-1 text-sm text-slate-700">
-                        <div><span className="font-semibold text-slate-900">Pattern:</span> {getFirstSentence(rationale.typical)}</div>
-                        <div><span className="font-semibold text-slate-900">Deviation:</span> {getFirstSentence(rationale.deviation)}</div>
-                        <div><span className="font-semibold text-slate-900">Risk:</span> {getFirstSentence(rationale.risk)}</div>
+                      <div><span className="font-semibold text-slate-900">Pattern:</span> {getFirstSentence(patternText)}</div>
+                      <div><span className="font-semibold text-slate-900">Deviation:</span> {getFirstSentence(deviationText)}</div>
+                      <div><span className="font-semibold text-slate-900">Risk:</span> {getFirstSentence(riskText)}</div>
                       </div>
                     </details>
                   </div>

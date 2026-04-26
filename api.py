@@ -8,6 +8,7 @@ import io
 import re
 import string
 from structural import detect_structural_issue
+from action_threshold import determine_action_threshold
 from knowledge_refresh import explain_pattern
 from documenter import generate_documentation
 from messager import generate_message
@@ -315,10 +316,22 @@ def analyze(input: PrescriptionInput):
     if parsed is None:
         return {"status": "INVALID", "error": "Invalid input."}
 
+
     structural = detect_structural_issue(
         parsed.drug, parsed.sig, parsed.quantity, parsed.frequency
     )
     has_structural_trigger = _has_structural_trigger(structural)
+
+    # Action threshold logic
+    threshold = determine_action_threshold(
+        drug=parsed.drug,
+        sig=parsed.sig,
+        quantity=parsed.quantity,
+        issue_type=getattr(structural, "issue_type", None),
+        affects=getattr(structural, "affects", None),
+        risk=getattr(structural, "risk", None),
+        pattern_assessment=getattr(structural, "pattern_assessment", None),
+    )
 
     # Intentional product boundary:
     # If no structural ambiguity is detected, classify as No Issue and do not
@@ -329,11 +342,51 @@ def analyze(input: PrescriptionInput):
         structural.clarification = "Unlikely"
         structural.resolution = "🟢 NONE"
 
-    safe_to_verify = get_safe_to_verify(structural)
-    follow_up_need = get_follow_up_need(structural)
-    severity = get_severity(structural)
+
+    # --- Normalization block for legacy UI fields (applied immediately before result) ---
+    if threshold.action_level == "HOLD_NOW":
+        resolution = "🔴 HOLD NOW / CHALLENGE"
+        severity = "🔴 HIGH"
+        risk_severity = "HIGH"
+        immediate_usability = "NO"
+        workflow_status = "HOLD NOW"
+        ui_priority = "🔴 HOLD"
+        action_badge = "🔴 HOLD NOW / CHALLENGE"
+        follow_up_need = "🔴 REQUIRED BEFORE VERIFY"
+        action_bias = "Confirm before verification"
+    elif threshold.action_level == "ADDRESS_DURING_WORKFLOW":
+        resolution = "🟠 ADDRESS DURING WORKFLOW"
+        severity = "🟠 MODERATE"
+        risk_severity = "MODERATE"
+        immediate_usability = "CONDITIONAL"
+        workflow_status = "ADDRESS DURING WORKFLOW"
+        ui_priority = "🟠 WORKFLOW"
+        action_badge = "🟠 ADDRESS DURING WORKFLOW"
+        follow_up_need = "🟠 REQUIRED DURING WORKFLOW"
+        action_bias = "Clarify or document during workflow"
+    elif threshold.action_level == "COMPLETE":
+        resolution = "🟡 COMPLETE"
+        severity = "🟡 LOW"
+        risk_severity = "LOW"
+        immediate_usability = "YES"
+        workflow_status = "COMPLETE"
+        ui_priority = "🟡 COMPLETE"
+        action_badge = "🟡 COMPLETE"
+        follow_up_need = "Optional"
+        action_bias = "Verify with counseling if useful"
+    else:
+        resolution = "🟢 NONE"
+        severity = "🟢 NONE"
+        risk_severity = "NONE"
+        immediate_usability = "YES"
+        workflow_status = "NONE"
+        ui_priority = "🟢 NONE"
+        action_badge = "🟢 NONE"
+        follow_up_need = "None"
+        action_bias = "No action needed"
+    safe_to_verify = threshold.safe_to_verify
     risk_score = get_risk_score(
-        structural.resolution, safe_to_verify, follow_up_need, severity
+        resolution, safe_to_verify, follow_up_need, severity
     )
     refresh = explain_pattern(
         parsed.drug, parsed.sig, parsed.quantity, parsed.frequency
@@ -356,7 +409,15 @@ def analyze(input: PrescriptionInput):
         "structural_issue": structural.structural_issue,
         "affects": structural.affects,
         "clarification": structural.clarification,
-        "resolution": structural.resolution,
+        "resolution": f"{threshold.badge} {threshold.action_label}",
+        "severity": severity,
+        "risk_severity": risk_severity,
+        "immediate_usability": immediate_usability,
+        "workflow_status": threshold.action_label,
+        "ui_priority": f"{threshold.badge} {threshold.action_label}",
+        "action_badge": f"{threshold.badge} {threshold.action_label}",
+        "follow_up_need": follow_up_need,
+        "action_bias": action_bias,
         "structure_assessment": structural.structure_assessment,
         "pattern_assessment": structural.pattern_assessment,
         "pattern_issue": structural.pattern_issue,
@@ -364,14 +425,7 @@ def analyze(input: PrescriptionInput):
         "drug_recognition_status": structural.drug_recognition_status,
         "drug_recognition_match": structural.drug_recognition_match,
         "safe_to_verify": safe_to_verify,
-        "follow_up_need": follow_up_need,
-        "severity": severity,
-        "risk_severity": structural.risk_severity,
-        "immediate_usability": structural.immediate_usability,
-        "workflow_status": structural.workflow_status,
         "risk_score": risk_score,
-        "ui_priority": get_ui_priority(risk_score),
-        "action_bias": get_action_bias(structural.resolution),
         "override_risk": override_risk,
         "refresh_points": refresh.summary_points,
         "refresh_conclusion": refresh.conclusion,
@@ -380,6 +434,14 @@ def analyze(input: PrescriptionInput):
         "internal_message": msg.internal_message,
         "drug_context_match": msg.drug_context_key,
         "source_ref": input.source_ref,
+        # Action threshold fields (source of truth)
+        "action_level": threshold.action_level,
+        "badge": threshold.badge,
+        "action_label": threshold.action_label,
+        "follow_up_required": threshold.follow_up_required,
+        "threshold_reason": threshold.reason,
+        # Debug field for normalization
+        "threshold_debug_applied": threshold.action_level,
     }
 
     if debug_enabled:
@@ -488,7 +550,7 @@ def analyze(input: PrescriptionInput):
         rx_instance_id_error=rx_instance_id_error,
         fill_number=input.fill_number,
     )
-
+    result["action_badge"] = f"{threshold.badge} {threshold.action_label}"
     return result
 
 @app.get("/health")
