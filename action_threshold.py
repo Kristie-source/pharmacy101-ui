@@ -66,7 +66,12 @@ def determine_action_threshold(
     if (
         "tartrate once daily" in text
         or ("metoprolol tartrate" in text and ("once daily" in text or "qd" in text or "daily" in text))
-        or ("azithromycin" in text and "take 2 tablets once" in text and "qty 4" in text)
+        or (
+            "azithromycin" in text
+            and "2 tablets" in text
+            and "once" in text
+            and (str(quantity or "").strip() == "4" or "qty 4" in text)
+        )
         or ("valacyclovir" in text and "bid" in text and "qty 28" in text and ("no duration" in text or "no indication" in text))
         or ("colchicine" in text and ("prn" in text and "scheduled" in text))
         or "quantity mismatch" in text
