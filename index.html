@@ -1415,7 +1415,12 @@ const newCase = {
   quantity: data.quantity ?? "",
 
   // 🔑 FIX: use existing UI lane ("CHALLENGE"), not new one
-  lane: isHoldNow ? "CHALLENGE" : data.lane,
+  lane:
+  data.action_level === "HOLD_NOW"
+    ? "CHALLENGE"
+    : data.action_level === "ADDRESS_DURING_WORKFLOW"
+      ? "CLARIFY USE"
+      : data.lane,
 
   // 🔑 FIX: map backend → UI fields
   structural:
@@ -1439,12 +1444,32 @@ const newCase = {
 
   // 🔑 FIX: resolution object (UI expects object, not string)
   resolution: {
-    label: isHoldNow ? "CHALLENGE" : data.action_label || "NONE",
-    emoji: data.badge || "",
-    bg: isHoldNow ? "bg-red-50" : "bg-slate-50",
-    border: isHoldNow ? "border-red-300" : "border-slate-200",
-    text: isHoldNow ? "text-red-900" : "text-slate-700",
-  },
+  label:
+    data.action_level === "HOLD_NOW"
+      ? "CHALLENGE"
+      : data.action_level === "ADDRESS_DURING_WORKFLOW"
+        ? "CLARIFY USE"
+        : data.action_label || "NONE",
+  emoji: data.badge || "",
+  bg:
+    data.action_level === "HOLD_NOW"
+      ? "bg-red-50"
+      : data.action_level === "ADDRESS_DURING_WORKFLOW"
+        ? "bg-amber-50"
+        : "bg-slate-50",
+  border:
+    data.action_level === "HOLD_NOW"
+      ? "border-red-300"
+      : data.action_level === "ADDRESS_DURING_WORKFLOW"
+        ? "border-amber-300"
+        : "border-slate-200",
+  text:
+    data.action_level === "HOLD_NOW"
+      ? "text-red-900"
+      : data.action_level === "ADDRESS_DURING_WORKFLOW"
+        ? "text-amber-900"
+        : "text-slate-700",
+},
 
   // 🔑 FIX: clinical explanation section
   refresh: [

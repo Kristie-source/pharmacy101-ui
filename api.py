@@ -324,14 +324,17 @@ def analyze(input: PrescriptionInput):
 
     # Action threshold logic
     threshold = determine_action_threshold(
-        drug=parsed.drug,
-        sig=parsed.sig,
-        quantity=parsed.quantity,
-        issue_type=getattr(structural, "issue_type", None),
-        affects=getattr(structural, "affects", None),
-        risk=getattr(structural, "risk", None),
-        pattern_assessment=getattr(structural, "pattern_assessment", None),
-    )
+    drug=parsed.drug,
+    sig=parsed.sig,
+    quantity=parsed.quantity,
+    issue_type=locals().get("issue_type"),
+    affects=locals().get("affects"),
+    risk=locals().get("override_risk") or locals().get("risk"),
+    pattern_assessment=locals().get("pattern_assessment"),
+    clinical_check=locals().get("clinical_check") or locals().get("issue_line"),
+    deviation=locals().get("deviation") or locals().get("why_this_matters"),
+    prescriber_message=locals().get("prescriber_message"),
+)
 
     # Intentional product boundary:
     # If no structural ambiguity is detected, classify as No Issue and do not

@@ -433,7 +433,7 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
     # Run structure-only pattern detection before missing-field checks.
     structure_pattern = classify_structure_pattern(sig)
 
-    # Require an explicit SIG dose amount (for example, 1 tablet / 2 capsules).
+    # Allow missing dose amount: do not raise INVALID, just record missing element for downstream analysis.
     has_dose_amount = bool(
         re.search(
             r"\b\d+\s*(?:tablets?|tabs?|capsules?|caps?|puffs?|drops?|teaspoons?|tsp|ml|mL)\b",
@@ -441,12 +441,7 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
             flags=re.IGNORECASE,
         )
     )
-    if not has_dose_amount:
-        raise ValueError(
-            "Missing dose amount in SIG. Include a dose amount such as '1t', '1 tab', or '2 tabs'."
-        )
-    
-       # Parse frequency from SIG
+    # Parse frequency from SIG
     frequency = parse_frequency(sig)
 
     if not frequency and _is_single_dose_structure(sig):
@@ -460,6 +455,8 @@ def parse_prescription_line(raw_text: str) -> ParsedPrescription:
             "Missing usable SIG frequency. Include a schedule such as daily, BID, TID, q12h, or weekly."
         )
 
+    # Only return INVALID if both drug and sig are missing/unparseable (already handled above).
+    # Otherwise, allow missing dose and let downstream analysis handle it.
     return ParsedPrescription(
         raw_text=text,
         drug=drug,
