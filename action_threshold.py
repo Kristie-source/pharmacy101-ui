@@ -112,6 +112,20 @@ def determine_action_threshold(
             reason="Albuterol/inhaler PRN directions missing dose, puff frequency, or max daily use require clarification before handoff/counseling.",
         )
 
+    # Special rule: Ubrelvy/ubrogepant PRN always requires max daily use boundary
+    if (
+        ("ubrelvy" in text or "ubrogepant" in text)
+        and ("prn" in text or "as needed" in text)
+    ):
+        return ActionThresholdResult(
+            action_level="ADDRESS_DURING_WORKFLOW",
+            badge="🟠",
+            action_label="ADDRESS DURING WORKFLOW",
+            safe_to_verify="CONDITIONAL",
+            follow_up_required=True,
+            reason="Ubrelvy/ubrogepant PRN directions require explicit maximum daily use boundary for safe verification.",
+        )
+
     # Weekly med missing admin day, if counseling depends on it
     if "weekly" in text and ("missing day" in text or "no admin day" in text):
         return ActionThresholdResult(
