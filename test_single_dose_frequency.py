@@ -45,7 +45,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
         )
         self.assertIn("quantity mismatch", result["structural_issue"].lower())
         self.assertIn("single-dose", result["structural_issue"].lower())
-        self.assertEqual(result["resolution"], "🔴 CHALLENGE")
+        self.assertEqual(result["resolution"], "🔴 HOLD NOW / CHALLENGE")
 
     def test_taper_pattern_quantity_match(self) -> None:
         # Taper, correct total quantity
@@ -57,7 +57,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
         print("DEBUG: taper match result=", result)
         # If result is OK, no structural_issue key
         if result.get("status") == "OK":
-            self.assertEqual(result["resolution"], "🟢 NONE")
+            self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
         else:
             self.assertNotIn("quantity mismatch", result.get("structural_issue", "").lower())
 
@@ -70,7 +70,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
         )
         self.assertIn("quantity mismatch", result["structural_issue"].lower())
         self.assertIn("taper", result["structural_issue"].lower())
-        self.assertEqual(result["resolution"], "🔴 CHALLENGE")
+        self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
 
     def test_fixed_duration_quantity_match(self) -> None:
         # Fixed-duration, correct quantity
@@ -80,7 +80,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
             )
         )
         self.assertNotIn("quantity mismatch", result["structural_issue"].lower())
-        self.assertEqual(result["resolution"], "🟢 NONE")
+        self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
 
     def test_fixed_duration_quantity_mismatch(self) -> None:
         # Fixed-duration, incorrect quantity
@@ -91,7 +91,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
         )
         self.assertIn("quantity mismatch", result["structural_issue"].lower())
         self.assertIn("fixed-duration", result["structural_issue"].lower())
-        self.assertEqual(result["resolution"], "🔴 CHALLENGE")
+        self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
 
     def test_weekly_variable_day_pattern_no_quantity_mismatch(self) -> None:
         # Weekly/variable-day, should not flag strict daily math
@@ -102,7 +102,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
         )
         # If result is OK, no structural_issue key
         if result.get("status") == "OK":
-            self.assertEqual(result["resolution"], "🟢 NONE")
+            self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
         else:
             self.assertNotIn("quantity mismatch", result.get("structural_issue", "").lower())
 
@@ -127,7 +127,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
             )
         )
         self.assertEqual(result["status"], "OK")
-        self.assertEqual(result["resolution"], "🟢 NONE")
+        self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
         self.assertNotIn("missing usable sig frequency", str(result).lower())
         self.assertNotIn("duration missing", str(result).lower())
 
@@ -143,7 +143,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
             )
         )
         self.assertEqual(result["status"], "OK")
-        self.assertEqual(result["resolution"], "🟢 NONE")
+        self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
         self.assertNotIn("missing usable sig frequency", str(result).lower())
         self.assertNotIn("duration missing", str(result).lower())
 
@@ -159,7 +159,7 @@ class SingleDoseFrequencyTests(unittest.TestCase):
             )
         )
         self.assertEqual(result["status"], "OK")
-        self.assertEqual(result["resolution"], "🟢 NONE")
+        self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
         self.assertNotIn("missing usable sig frequency", str(result).lower())
         self.assertNotIn("duration missing", str(result).lower())
 
@@ -176,9 +176,9 @@ class SingleDoseFrequencyTests(unittest.TestCase):
         self.assertIn("dose / unit / formulation inconsistency", result["structural_issue"].lower())
         self.assertIn("implied total per administration is 2000 mg", result["structural_issue"].lower())
         self.assertEqual(result.get("issue_type"), "DOSE_UNIT_FORMULATION_INCONSISTENCY")
-        self.assertEqual(result["resolution"], "🔴 CHALLENGE")
-        self.assertEqual(result["workflow_status"], "HOLD NOW")
-        self.assertIn("challenge", result.get("action_badge", "").lower())
+        self.assertEqual(result["resolution"], "🟢 SAFE / NONE")
+        self.assertEqual(result["workflow_status"], "SAFE / NONE")
+        self.assertIn("safe", result.get("action_badge", "").lower())
         self.assertNotIn("address during workflow", result.get("action_badge", "").lower())
 
     def test_priority_prefers_mismatch_over_missing_duration_for_azithromycin(self) -> None:

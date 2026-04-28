@@ -2093,17 +2093,26 @@ const handleClearCompletedCases = () => {
               const headerSupportText = isVerifiedFollowUpHeader
                 ? "→ Follow-up required"
                 : `→ ${getShortActionPhrase(active, activeStatus, active?.id)}`;
-              return (
-            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <div className={`inline-flex rounded-xl border px-4 py-2 text-base font-bold ${visibleHeader.bg} ${visibleHeader.border} ${visibleHeader.text}`}>
-                {getLaneIcon(visibleHeader.label)} {headerLabelText}
-              </div>
-              <div className={`text-base font-bold uppercase tracking-wide ${visibleHeader.text}`}>
-                {headerSupportText}
-              </div>
-            </div>
-              );
-            })()}
+
+                return (
+                  <>
+                    <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <div className={`inline-flex rounded-xl border px-4 py-2 text-base font-bold ${visibleHeader.bg} ${visibleHeader.border} ${visibleHeader.text}`}>
+                        {getLaneIcon(visibleHeader.label)} {headerLabelText}
+                      </div>
+                      <div className={`text-base font-bold uppercase tracking-wide ${visibleHeader.text}`}>
+                        {headerSupportText}
+                      </div>
+                    </div>
+                    {/* Action Line: visually dominant, directly under header */}
+                    <div className="mb-3">
+                      <div className={`rounded-xl px-5 py-3 text-lg font-bold border shadow-sm tracking-tight ${visibleHeader.bg} ${visibleHeader.border} ${visibleHeader.text}`}>
+                        {getPrimaryActionInstruction(active, activeStatus, active?.id)}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
             <div className="mb-1 text-2xl font-semibold leading-tight">{active.title}</div>
             {sourceRefById[active?.id] && (
