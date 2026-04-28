@@ -597,7 +597,7 @@ def analyze(input: PrescriptionInput):
     result["action_badge"] = f"{threshold.badge} {threshold.action_label}"
 
     # FINAL OVERRIDE: fluconazole qty 2 single-dose repeat pattern
-    fluconazole_safe_repeat_override_applied = False
+    # fluconazole_safe_repeat_override_applied = False
     sig_lower = (parsed.sig or "").lower()
     if (
         "fluconazole" in (parsed.drug or "").lower()
@@ -611,7 +611,7 @@ def analyze(input: PrescriptionInput):
         )
         and "once daily" not in sig_lower
     ):
-        fluconazole_safe_repeat_override_applied = True
+        # fluconazole_safe_repeat_override_applied = True
         result.update({
             "action_level": "NONE",
             "action_label": "SAFE / NONE",
@@ -644,9 +644,9 @@ def analyze(input: PrescriptionInput):
             "deviation": "",
             "documentation": "Prescription written for Fluconazole 150 mg, take 1 tablet by mouth once. May repeat in 72 hours if symptoms persist, quantity 2. This matches a common repeat-dose pattern; no clarification needed."
         })
-    result["fluconazole_safe_repeat_override_applied"] = fluconazole_safe_repeat_override_applied
+    # result["fluconazole_safe_repeat_override_applied"] = fluconazole_safe_repeat_override_applied
     # FINAL OVERRIDE: fluconazole qty 2 once daily + conditional repeat pattern
-    fluconazole_once_daily_conditional_override_applied = False
+    # fluconazole_once_daily_conditional_override_applied = False
     if (
         "fluconazole" in (parsed.drug or "").lower()
         and str(parsed.quantity).strip() == "2"
@@ -661,7 +661,7 @@ def analyze(input: PrescriptionInput):
             or "in 72 hours" in sig_lower
         )
     ):
-        fluconazole_once_daily_conditional_override_applied = True
+        # fluconazole_once_daily_conditional_override_applied = True
         result.update({
             "resolution": "🟠 CLARIFY DIRECTIONS",
             "severity": "🟠 MODERATE",
@@ -686,7 +686,7 @@ def analyze(input: PrescriptionInput):
             "prescriber_message": "Please clarify whether this is intended as a single-dose regimen with one possible repeat dose, or scheduled once-daily dosing.",
             "internal_message": "Once-daily scheduled language conflicts with conditional 72-hour repeat-dose language; clarify intended regimen before verification."
         })
-    result["fluconazole_once_daily_conditional_override_applied"] = fluconazole_once_daily_conditional_override_applied
+    # result["fluconazole_once_daily_conditional_override_applied"] = fluconazole_once_daily_conditional_override_applied
     return result
 
 @app.get("/health")

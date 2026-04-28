@@ -375,7 +375,7 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
     const structural = (item?.structural || "").toLowerCase();
 
     if (item?.pattern_assessment === "Pattern-questionable") {
-      return "Clarify intended use";
+      return "Clarify directions";
     }
 
     if (item.lane === "CHALLENGE") {
@@ -392,9 +392,9 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
     if (["CLARIFY USE", "COMPLETE"].includes(item.lane)) {
       if (structural.includes("schedule")) return "Confirm schedule";
       if (structural.includes("pattern") || structural.includes("prn") || structural.includes("use")) {
-        return "Clarify use pattern";
+        return "Clarify directions";
       }
-      return "Clarify use";
+      return "Clarify directions";
     }
 
     return "Verify as entered";
@@ -1059,10 +1059,11 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
           structural: "As-needed directions are present, but use-pattern trigger wording is not explicit.",
           refresh: [
             "Step 3 ADDRESS triggered: PRN structure is interpretable, but trigger wording is not explicit.",
-            "Pattern focus: clarify use pattern so episodic use trigger is clear.",
-            "Next step: clarify use pattern during workflow."
+            "Pattern focus: clarify directions so episodic use trigger is clear.",
+            "Next step: clarify directions during workflow."
           ],
-          message: "Clarify use pattern: PRN trigger wording should be explicit.",
+          message: "Clarify directions: PRN trigger wording should be explicit.",
+                  message: "Clarify directions: PRN trigger wording should be explicit.",
         };
       }
 
@@ -1175,7 +1176,7 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
           "Pattern focus: it is unclear whether the order is intended for ongoing daily use or intermittent episodic use, so one clear use path is not stated.",
           "Next step: request one clear use path before dispensing."
         ],
-        message: "SIG structure is unclear because scheduled and as-needed use are mixed without one clear use path. Please clarify intended use structure before dispensing.",
+        message: "SIG structure is unclear because scheduled and as-needed use are mixed without one clear use path. Clarify directions before dispensing.",
       };
     }
 
@@ -2332,7 +2333,7 @@ const summaryText = getFirstSentence(clinicalCheck);
               const documentation = typeof active?.documentation === "string"
                 ? active.documentation.trim()
                 : active?.documentation
-                  ? JSON.stringify(active.documentation, null, 2)
+                  ? JSON.stringify(Object.fromEntries(Object.entries(active.documentation).filter(([k]) => k !== "fluconazole_safe_repeat_override_applied" && k !== "fluconazole_once_daily_conditional_override_applied")), null, 2)
                   : "Not provided";
 
               const seenBefore = active?.seen_before_context;
