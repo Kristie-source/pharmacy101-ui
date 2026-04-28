@@ -553,7 +553,7 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
 
     const queueSignal = getQueueSignal(item);
     return {
-      label: queueSignal.label,
+      label: getQueueBucket({ item, status }),
       tone: queueSignal.tone,
       bg: item.resolution.bg,
       border: item.resolution.border,
@@ -1496,7 +1496,9 @@ const newCase = {
       ? "text-red-900"
       : data.action_level === "ADDRESS_DURING_WORKFLOW"
         ? "text-amber-900"
-        : "text-slate-700",
+        : (data.action_level === "NONE" || (data.resolution && data.resolution.label === "VERIFIED / NO ISSUE"))
+          ? "text-green-700"
+          : "text-slate-700",
 },
 
   // 🔑 FIX: clinical explanation section
@@ -1697,28 +1699,13 @@ window.debugBucketAudit = () => {
     {
       title: "HOLD NOW",
       tone: "red",
-      items: queueEntries
-        .filter((entry) => entry.status === "active" && entry.item.lane === "CHALLENGE"),
+      items: queueEntries.filter((entry) => entry.status === "active" && getQueueBucket(entry) === "HOLD NOW"),
       accent: "border-red-200 bg-red-50/40",
     },
     {
       title: "ADDRESS DURING WORKFLOW",
       tone: "amber",
-      items: queueEntries
-        .filter((entry) => {
-          if (entry.status !== "active") return false;
-          const laneStr = String(entry.item.lane || "").toUpperCase();
-          const actionLabelStr = String(entry.item.action_label || "").toUpperCase();
-          const actionLevelStr = String(entry.item.action_level || "").toUpperCase();
-          return (
-            laneStr.includes("CLARIFY") ||
-            actionLabelStr.includes("CLARIFY") ||
-            actionLevelStr.includes("CLARIFY") ||
-            laneStr === "ADDRESS DURING WORKFLOW" ||
-            entry.item.follow_up_required === true ||
-            ["CLARIFY USE", "CLARIFY DIRECTIONS", "COMPLETE"].includes(entry.item.lane)
-          );
-        }),
+      items: queueEntries.filter((entry) => entry.status === "active" && getQueueBucket(entry) === "ADDRESS DURING WORKFLOW"),
       accent: "border-amber-200 bg-amber-50/40",
     },
     {
