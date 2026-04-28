@@ -53,8 +53,8 @@ def explain_pattern(drug: str, sig: str, quantity: int, frequency: Optional[str]
 
         summary_points = [
             f"Common pattern: {common_pattern_text}.",
-            "Why this stands out: Daily dosing with quantity 4 is fully written, but it does not clearly match a common low-ambiguity fluconazole treatment pattern.",
-            "Why quantity matters: Quantity 4 supports several scheduled doses, but quantity alone does not identify whether the intended plan is single-dose, short-course, or another regimen.",
+            f"Why this stands out: Daily dosing with quantity {quantity} is fully written, but it does not clearly match a common low-ambiguity fluconazole treatment pattern.",
+            f"Why quantity matters: Quantity {quantity} supports several scheduled doses, but quantity alone does not identify whether the intended plan is single-dose, short-course, or another regimen.",
         ]
 
         return KnowledgeResult(

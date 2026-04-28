@@ -1398,7 +1398,15 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
       throw new Error("Analyze request failed");
     }
 
+
     const data = await response.json();
+    if (data.status === "INVALID") {
+      setInputFeedback({
+        type: "invalid",
+        message: data.error || "Invalid input. Please include drug name, strength, SIG, and quantity.",
+      });
+      return;
+    }
     console.log("BACKEND RESULT:", data);
 
 
