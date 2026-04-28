@@ -316,6 +316,14 @@ def analyze(input: PrescriptionInput):
     if parsed is None:
         return {"status": "INVALID", "error": "Invalid input."}
 
+    # Require explicit drug strength for most products
+    import re
+    strength_pattern = re.compile(r"\b\d+(\.\d+)?\s*(mg|mcg|g|gm|unit|units|%)\b", re.IGNORECASE)
+    if not strength_pattern.search(parsed.drug):
+        return {
+            "status": "INVALID",
+            "error": "Missing drug strength. Include drug name, strength, SIG, and quantity."
+        }
 
     structural = detect_structural_issue(
         parsed.drug, parsed.sig, parsed.quantity, parsed.frequency
@@ -323,18 +331,37 @@ def analyze(input: PrescriptionInput):
     has_structural_trigger = _has_structural_trigger(structural)
 
     # Action threshold logic
+
     threshold = determine_action_threshold(
-    drug=parsed.drug,
-    sig=parsed.sig,
-    quantity=parsed.quantity,
-    issue_type=locals().get("issue_type"),
-    affects=locals().get("affects"),
-    risk=locals().get("override_risk") or locals().get("risk"),
-    pattern_assessment=locals().get("pattern_assessment"),
-    clinical_check=locals().get("clinical_check") or locals().get("issue_line"),
-    deviation=locals().get("deviation") or locals().get("why_this_matters"),
-    prescriber_message=locals().get("prescriber_message"),
-)
+        drug=parsed.drug,
+        sig=parsed.sig,
+        quantity=parsed.quantity,
+        issue_type=locals().get("issue_type"),
+        affects=locals().get("affects"),
+        risk=locals().get("override_risk") or locals().get("risk"),
+        pattern_assessment=locals().get("pattern_assessment"),
+        clinical_check=locals().get("clinical_check") or locals().get("issue_line"),
+        deviation=locals().get("deviation") or locals().get("why_this_matters"),
+        prescriber_message=locals().get("prescriber_message"),
+    )
+
+    # Special case: pattern-questionable or PATTERN_QUESTIONABLE with fluconazole-style conditional second dose
+    sig_lower = (parsed.sig or "").lower()
+    if (
+        (
+            (locals().get("pattern_assessment") and "pattern-questionable" in str(locals().get("pattern_assessment")).lower())
+            or (locals().get("issue_type") and "pattern_questionable" in str(locals().get("issue_type")).lower())
+        )
+        and "fluconazole" in (parsed.drug or "").lower()
+        and "once daily" in sig_lower
+        and ("if symptoms persist" in sig_lower or "in 72 hours" in sig_lower or "second tablet" in sig_lower)
+    ):
+        threshold.action_level = "CLARIFY"
+        threshold.badge = "🟠"
+        threshold.action_label = "CLARIFY DIRECTIONS"
+        threshold.safe_to_verify = "UNSAFE"
+        threshold.follow_up_required = True
+        threshold.reason = "Directions contain both scheduled and conditional dosing (e.g., 'once daily' and 'if symptoms persist'), which is ambiguous. Clarify intended regimen before verification."
 
     # Intentional product boundary:
     # If no structural ambiguity is detected, classify as No Issue and do not
