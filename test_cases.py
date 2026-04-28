@@ -199,6 +199,11 @@ def get_override_risk(structural: object, drug: str, sig: str, parsed: object) -
 
 
 TEST_CASES = [
+    # --- Fluconazole qty 2 test cases for backend logic ---
+    # Case A: Should be SAFE/NONE
+    {"drug": "Fluconazole 150 mg", "sig": "take 1 tablet by mouth once. May repeat in 72 hours if symptoms persist", "quantity": 2},
+    # Case B: Should be CLARIFY
+    {"drug": "Fluconazole 150 mg", "sig": "take 1 tablet by mouth once daily. If symptoms persist, take 2nd tablet in 72 hours", "quantity": 2},
     {"drug": "Valacyclovir 1 gm", "sig": "take 1 tablet by mouth twice daily prn", "quantity": 28},
     {"drug": "Valacyclovir 1 gm", "sig": "take 1 tablet by mouth every 12 hours", "quantity": 28},
     {"drug": "Valacyclovir 1 gm", "sig": "take 1 tablet by mouth every 12 hours as needed", "quantity": 30},
