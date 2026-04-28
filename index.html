@@ -555,9 +555,13 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
     return {
       label: getQueueBucket({ item, status }),
       tone: queueSignal.tone,
-      bg: item.resolution.bg,
-      border: item.resolution.border,
-      text: item.resolution.text,
+      ...(getQueueBucket({ item, status }) === "HOLD NOW"
+        ? { bg: "bg-red-50", border: "border-red-300", text: "text-red-900" }
+        : getQueueBucket({ item, status }) === "ADDRESS DURING WORKFLOW"
+        ? { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-900" }
+        : getQueueBucket({ item, status }) === "VERIFIED / NO ISSUE"
+        ? { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-green-700" }
+        : { bg: "bg-slate-50", border: "border-slate-200", text: "text-slate-700" }),
     };
   };
 
