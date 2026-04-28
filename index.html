@@ -477,15 +477,35 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
 
   const getQueueSignal = (item) => {
     if (!item) {
-  return {
-    label: "NO ACTIVE CASE",
-    tone: "slate",
-    helper: "No case is currently selected.",
-  };
-}
-    if (item?.pattern_assessment === "Pattern-questionable") return { label: "VERIFY - FOLLOW-UP", tone: "amber" };
-    if (item.lane === "CHALLENGE") return { label: "HOLD NOW", tone: "red" };
-    if (["CLARIFY USE", "COMPLETE"].includes(item.lane)) return { label: "ADDRESS DURING WORKFLOW", tone: "amber" };
+      return {
+        label: "NO ACTIVE CASE",
+        tone: "slate",
+        helper: "No case is currently selected.",
+      };
+    }
+    // New mapping for case review header
+    const lane = (item.lane || "").toUpperCase();
+    const actionLabel = (item.action_label || "").toUpperCase();
+    const safeToVerify = (item.safe_to_verify || "").toUpperCase();
+    if (
+      lane.includes("CLARIFY") ||
+      actionLabel.includes("CLARIFY") ||
+      item.follow_up_required === true
+    ) {
+      return { label: "ADDRESS DURING WORKFLOW", tone: "amber" };
+    }
+    if (
+      lane.includes("HOLD") ||
+      safeToVerify === "UNSAFE"
+    ) {
+      return { label: "HOLD NOW", tone: "red" };
+    }
+    if (
+      (item.action_level || "").toUpperCase() === "NONE" ||
+      lane === "NONE"
+    ) {
+      return { label: "VERIFIED / NO ISSUE", tone: "green" };
+    }
     return { label: "VERIFY", tone: "green" };
   };
 
