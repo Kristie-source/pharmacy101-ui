@@ -731,6 +731,20 @@ def detect_pattern_families(parsed) -> Optional[PatternResult]:
     sig = parsed.sig
     frequency = parsed.frequency
 
+    # Tadalafil PRN for ED: patient counseling only, not workflow interruption
+    drug_lower = drug.lower()
+    sig_lower = sig.lower()
+    tadalafil_strengths = ["5 mg", "10 mg", "20 mg"]
+    is_tadalafil = "tadalafil" in drug_lower and any(strength in drug_lower for strength in tadalafil_strengths)
+    is_prn_ed = ("prn" in sig_lower or "as needed" in sig_lower) and ("erectile dysfunction" in sig_lower or "ed" in sig_lower)
+    if is_tadalafil and is_prn_ed:
+        return PatternResult(
+            pattern_name="tadalafil_prn_patient_clarity",
+            structural_issue="PRN for ED: Patient may benefit from counseling on as-needed use, but no workflow interruption required.",
+            affects="instructions",
+            clarification="Patient counseling",
+        )
+
     for detector in (detect_prn_scheduled_conflict,):
         result = detector(drug, sig, frequency)
         if result:

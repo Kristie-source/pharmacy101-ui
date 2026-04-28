@@ -35,6 +35,48 @@ def determine_action_threshold(
     deviation=None,
     prescriber_message=None,
 ) -> ActionThresholdResult:
+    # Special rule: Tadalafil PRN for ED — patient counseling only, not workflow interruption
+    tadalafil_prn_ed_signals = [
+        "tadalafil",
+        "prn for ed",
+        "prn for erectile dysfunction",
+        "as needed for ed",
+        "as needed for erectile dysfunction",
+        "prn for ed: patient may benefit from counseling on as-needed use",
+        "prn for ed: patient may benefit from counseling on as-needed use, but no workflow interruption required."
+    ]
+    text_lower = " ".join(
+        str(x or "").lower()
+        for x in [
+            drug,
+            sig,
+            quantity,
+            issue_type,
+            affects,
+            risk,
+            pattern_assessment,
+            clinical_check,
+            deviation,
+            prescriber_message,
+        ]
+    )
+    if (
+        "tadalafil" in text_lower
+        and (
+            "prn for ed" in text_lower
+            or "prn for erectile dysfunction" in text_lower
+            or "as needed for ed" in text_lower
+            or "as needed for erectile dysfunction" in text_lower
+        )
+    ) or any(signal in text_lower for signal in tadalafil_prn_ed_signals):
+        return ActionThresholdResult(
+            action_level="NONE",
+            badge="🟢",
+            action_label="SAFE / NONE",
+            safe_to_verify="SAFE",
+            follow_up_required=False,
+            reason="NON_BLOCKING_PATIENT_CLARITY: PRN for ED is not a workflow interruption. Patient may benefit from counseling on as-needed use, but no prescriber clarification is required.",
+        )
     """
     Converts a detected prescription issue into a real-world pharmacist action threshold.
 

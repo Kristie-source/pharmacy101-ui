@@ -200,6 +200,8 @@ def get_override_risk(structural: object, drug: str, sig: str, parsed: object) -
 
 TEST_CASES = [
     # --- Fluconazole qty 2 test cases for backend logic ---
+    # Tadalafil PRN for ED: should be SAFE/NONE, NON_BLOCKING_PATIENT_CLARITY
+    {"drug": "Tadalafil 20 mg", "sig": "take 1 tablet by mouth as needed for erectile dysfunction", "quantity": 10},
     # Case A: Should be SAFE/NONE
     {"drug": "Fluconazole 150 mg", "sig": "take 1 tablet by mouth once. May repeat in 72 hours if symptoms persist", "quantity": 2},
     # Case B: Should be CLARIFY
