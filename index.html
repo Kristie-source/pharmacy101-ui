@@ -1647,8 +1647,12 @@ const newCase = {
   const actionLabelStr = String(item.action_label || "").toUpperCase();
   const actionLevelStr = String(item.action_level || "").toUpperCase();
 
+
   if (entry.status === "pending") return "PENDING";
   if (entry.status === "resolved") return "RESOLVED";
+
+  // Allow VERIFIED/ISSUE routing for Mark Verified — Needs Follow-up regardless of status
+  if (isVerifiedFollowUpPending(entry.item)) return "VERIFIED/ISSUE";
 
   if (entry.status !== "active") return "REVIEW";
 
@@ -1722,8 +1726,7 @@ window.debugBucketAudit = () => {
     {
       title: "VERIFIED/ISSUE",
       tone: "blue",
-      items: queueEntries
-        .filter((entry) => entry.status === "active" && isVerifiedFollowUpPending(entry.item)),
+      items: queueEntries.filter((entry) => getQueueBucket(entry) === "VERIFIED/ISSUE"),
       accent: "border-sky-100 bg-sky-50/20",
     },
   ]
@@ -2447,4 +2450,3 @@ ReactDOM.createRoot(document.getElementById("root")).render(<Pharmacy101Extensio
     </script>
   </body>
 </html>
-
