@@ -1635,7 +1635,11 @@ const newCase = {
 
   const queueEntries = cases.map((item, idx) => ({ item, idx, status: caseStatuses[item.id] || "active" }));
   const getQueueBucket = (entry) => {
+
   const item = entry.item;
+  const laneStr = String(item.lane || "").toUpperCase();
+  const actionLabelStr = String(item.action_label || "").toUpperCase();
+  const actionLevelStr = String(item.action_level || "").toUpperCase();
 
   if (entry.status === "pending") return "PENDING";
   if (entry.status === "resolved") return "RESOLVED";
@@ -1649,25 +1653,31 @@ const newCase = {
     return "HOLD NOW";
   }
 
+
+  // Route to ADDRESS DURING WORKFLOW if:
+  // - lane/action_label/action_level contains CLARIFY
+  // - lane is ADDRESS DURING WORKFLOW
+  // - follow_up_required is true
   if (
-    ["CLARIFY USE", "COMPLETE", "INTERRUPTIVE"].includes(item.lane) ||
+    laneStr.includes("CLARIFY") ||
+    actionLabelStr.includes("CLARIFY") ||
+    actionLevelStr.includes("CLARIFY") ||
+    laneStr === "ADDRESS DURING WORKFLOW" ||
+    item.follow_up_required === true ||
+    ["CLARIFY USE", "CLARIFY DIRECTIONS","COMPLETE", "INTERRUPTIVE"].includes(item.lane) ||
     item?.pattern_assessment === "Pattern-questionable"
   ) {
     return "ADDRESS DURING WORKFLOW";
   }
-
- if (item.action_level === "HOLD_NOW") {
-  return "INTERRUPTIVE";
-}
-
-if (isVerifiedFollowUpPending(item)) {
-  return "VERIFIED/ISSUE";
-}
-
+  if (item.action_level === "HOLD_NOW") {
+    return "INTERRUPTIVE";
+  }
+  if (isVerifiedFollowUpPending(item)) {
+    return "VERIFIED/ISSUE";
+  }
   if (isFullyClearVerified(item)) {
     return "VERIFIED / NO ISSUE";
   }
-
   return "REVIEW";
 };
 window.debugBucketAudit = () => {
@@ -1695,7 +1705,20 @@ window.debugBucketAudit = () => {
       title: "ADDRESS DURING WORKFLOW",
       tone: "amber",
       items: queueEntries
-        .filter((entry) => entry.status === "active" && ["CLARIFY USE", "COMPLETE"].includes(entry.item.lane)),
+        .filter((entry) => {
+          if (entry.status !== "active") return false;
+          const laneStr = String(entry.item.lane || "").toUpperCase();
+          const actionLabelStr = String(entry.item.action_label || "").toUpperCase();
+          const actionLevelStr = String(entry.item.action_level || "").toUpperCase();
+          return (
+            laneStr.includes("CLARIFY") ||
+            actionLabelStr.includes("CLARIFY") ||
+            actionLevelStr.includes("CLARIFY") ||
+            laneStr === "ADDRESS DURING WORKFLOW" ||
+            entry.item.follow_up_required === true ||
+            ["CLARIFY USE", "CLARIFY DIRECTIONS", "COMPLETE"].includes(entry.item.lane)
+          );
+        }),
       accent: "border-amber-200 bg-amber-50/40",
     },
     {
