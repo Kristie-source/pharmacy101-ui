@@ -596,53 +596,42 @@ def analyze(input: PrescriptionInput):
     )
     result["action_badge"] = f"{threshold.badge} {threshold.action_label}"
 
-    # FINAL OVERRIDE: fluconazole qty 2 single-dose repeat pattern
-    # fluconazole_safe_repeat_override_applied = False
+    # FINAL OVERRIDE: tadalafil 5/10/20 mg PRN/as-needed pattern (ED-style)
     sig_lower = (parsed.sig or "").lower()
+    drug_lower = (parsed.drug or "").lower()
+    strength_match = any(s in drug_lower for s in ["5 mg", "10 mg", "20 mg"])
+    prn_match = ("as needed" in sig_lower) or ("prn" in sig_lower)
     if (
-        "fluconazole" in (parsed.drug or "").lower()
-        and str(parsed.quantity).strip() == "2"
-        and "once" in sig_lower
-        and (
-            "repeat" in sig_lower
-            or "in 72 hours" in sig_lower
-            or "second dose" in sig_lower
-            or "may repeat" in sig_lower
-        )
-        and "once daily" not in sig_lower
+        "tadalafil" in drug_lower
+        and strength_match
+        and prn_match
     ):
-        # fluconazole_safe_repeat_override_applied = True
         result.update({
             "action_level": "NONE",
             "action_label": "SAFE / NONE",
-            "follow_up_required": False,
-            "lane": "NONE",
-            "clinical_check": "No action needed",
-            "issue_line": "No action needed",
+            "workflow_status": "SAFE / NONE",
+            "ui_priority": "🟢 SAFE / NONE",
+            "action_badge": "🟢 SAFE / NONE",
+            "badge": "🟢",
             "safe_to_verify": "SAFE",
-            "threshold_reason": "Repeat-dose pattern accounted for in quantity.",
-            "structural_issue": "No action needed",
-            "affects": "none",
-            "clarification": "Unlikely",
-            "resolution": "🟢 SAFE / NONE",
+            "follow_up_required": False,
+            "follow_up_need": "None",
+            "action_bias": "No action needed",
+            "lane": "SAFE",
+            "issue_type": "NON_BLOCKING_PATIENT_CLARITY",
+            "issue_line": "Patient counseling point, not a workflow interruption",
+            "clinical_check": "Recognized tadalafil PRN pattern; patient-facing max daily use is not written.",
+            "deviation": "No prescriber clarification required; counsel patient not to exceed once daily.",
+            "risk": "Patient may need counseling on max daily use, but prescription is usable as written.",
+            "why_this_matters": "Patient may benefit from counseling not to exceed once daily.",
+            "action_line": "Verify; counsel patient not to take more than once daily.",
             "prescriber_message": "",
-            "internal_message": "",
-            "risk_score": 0,
-            "risk_severity": "NONE",
-            # Additional fields for full SAFE override consistency
-            "structure_assessment": "Structurally complete",
-            "pattern_assessment": "Common repeat-dose pattern",
-            "pattern_issue": "",
-            "refresh_points": [
-                "This prescription matches a common repeat-dose pattern for fluconazole.",
-                "Quantity 2 supports the initial dose plus one possible repeat dose as written.",
-                "No clarification is needed if the intent is initial plus one repeat dose."
-            ],
-            "refresh_conclusion": "Repeat-dose quantity is accounted for; no clarification needed.",
-            "why_this_matters": "Quantity 2 supports the initial dose plus one possible repeat dose.",
-            "action_line": "No action needed",
-            "deviation": "",
-            "documentation": "Prescription written for Fluconazole 150 mg, take 1 tablet by mouth once. May repeat in 72 hours if symptoms persist, quantity 2. This matches a common repeat-dose pattern; no clarification needed."
+            "internal_message": "Verify as written; counsel max once daily.",
+            "threshold_reason": "NON_BLOCKING_PATIENT_CLARITY: tadalafil PRN is a recognized as-needed pattern. Counsel patient not to exceed once daily; no prescriber clarification required.",
+            "structural_issue": "Patient-facing max daily use not written; non-blocking counseling point.",
+            "structure_assessment": "Non-blocking patient clarity",
+            "override_risk": "Patient may need counseling on maximum daily use, but prescription is usable as written.",
+            "documentation": "Prescription written for tadalafil PRN; usable as written. Counsel patient not to exceed once daily."
         })
     # result["fluconazole_safe_repeat_override_applied"] = fluconazole_safe_repeat_override_applied
     # FINAL OVERRIDE: fluconazole qty 2 once daily + conditional repeat pattern
@@ -687,6 +676,34 @@ def analyze(input: PrescriptionInput):
             "internal_message": "Once-daily scheduled language conflicts with conditional 72-hour repeat-dose language; clarify intended regimen before verification."
         })
     # result["fluconazole_once_daily_conditional_override_applied"] = fluconazole_once_daily_conditional_override_applied
+    # --- Tadalafil PRN override debug and normalization block (immediately before return) ---
+    drug = result.get("drug", "")
+    sig = result.get("sig", "")
+    drug_lower = drug.lower()
+    sig_lower = sig.lower()
+    normalized_drug = drug_lower.replace(" ", "")
+    strength_match = any(s in normalized_drug for s in ["5mg", "10mg", "20mg"])
+    prn_match = ("as needed" in sig_lower) or ("prn" in sig_lower)
+    tadalafil_match = (
+        "tadalafil" in drug_lower
+        and strength_match
+        and prn_match
+    )
+    result["debug_tadalafil_drug"] = drug
+    result["debug_tadalafil_sig"] = sig
+    result["debug_tadalafil_match"] = tadalafil_match
+    if tadalafil_match:
+        result["lane"] = "SAFE"
+        result["issue_type"] = "NON_BLOCKING_PATIENT_CLARITY"
+        result["action_level"] = "NONE"
+        result["action_label"] = "SAFE / NONE"
+        result["safe_to_verify"] = "SAFE"
+        result["follow_up_required"] = False
+        result["prescriber_message"] = ""
+        result["action_line"] = "Verify; counsel patient not to take more than once daily."
+        result["clinical_check"] = "Recognized tadalafil PRN pattern; patient-facing max daily use is not written."
+        result["deviation"] = "No prescriber clarification required; counsel patient not to exceed once daily."
+        result["risk"] = "Patient may need counseling on max daily use, but prescription is usable as written."
     return result
 
 @app.get("/health")
