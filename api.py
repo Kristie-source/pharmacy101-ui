@@ -775,6 +775,61 @@ def analyze(input: PrescriptionInput):
     ):
         result["decision"] = "VERIFY"
         result["quality_tag"] = "Add max once daily for clarity."
+
+    # --- CHALLENGE pattern rules (only if decision is still VERIFY; tramadol REVIEW runs before this) ---
+    if result.get("decision") == "VERIFY":
+        # 1. Insulin missing units
+        if (
+            "insulin" in drug_l or "insulin" in combined_l
+        ) and (
+            re.search(r"inject\s+\d+\b", sig_l)
+            and not re.search(r"unit(s)?", sig_l)
+        ):
+            result["decision"] = "CHALLENGE"
+            result["quality_tag"] = None
+
+        # 2. Take as directed
+        elif "take as directed" in sig_l:
+            result["decision"] = "CHALLENGE"
+            result["quality_tag"] = None
+
+        # 3. PRN antiviral without episode/duration
+        elif (
+            any(x in drug_l for x in ["valacyclovir", "acyclovir", "famciclovir", "oseltamivir"])
+            and ("as needed" in sig_l or "prn" in sig_l)
+            and not any(x in sig_l for x in ["episode", "outbreak", "flare", "days", "day", "duration"])
+        ):
+            result["decision"] = "CHALLENGE"
+            result["quality_tag"] = None
+
+        # 4. Dual-intent scheduled + PRN
+        elif (
+            re.search(r"(once|twice|three times|every|daily|bid|tid|qid|q\d+h)", sig_l)
+            and ("as needed" in sig_l or "prn" in sig_l)
+            and any(x in sig_l for x in ["flare", "use"])
+            and not any(x in sig_l for x in ["max", "maximum", "limit"])
+        ):
+            result["decision"] = "CHALLENGE"
+            result["quality_tag"] = None
+
+        # 5. Quantity conflict (explicit safe patterns only)
+        # azithromycin: "take 2 tablets once" with quantity > 2
+        elif (
+            "azithromycin" in drug_l
+            and re.search(r"take\s*2\s*tablets?\s*once", sig_l)
+            and (parsed.quantity and int(parsed.quantity) > 2)
+        ):
+            result["decision"] = "CHALLENGE"
+            result["quality_tag"] = None
+
+        # amoxicillin: "three times daily" with quantity not divisible by 3
+        elif (
+            "amoxicillin" in drug_l
+            and re.search(r"three times daily|tid", sig_l)
+            and (parsed.quantity and int(parsed.quantity) % 3 != 0)
+        ):
+            result["decision"] = "CHALLENGE"
+            result["quality_tag"] = None
     return result
 
 @app.get("/health")
