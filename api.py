@@ -254,8 +254,29 @@ def _apply_non_redundant_clinical_sections(payload: dict) -> dict:
     normalized_deviation = _normalize_sentence_for_compare(deviation)
     normalized_risk = _normalize_sentence_for_compare(risk)
 
-    if not deviation or normalized_deviation == normalized_clinical:
-        deviation = _fallback_deviation(payload)
+    # Determine if this is a true SAFE / NONE case
+    action_level = str(payload.get("action_level") or "").upper()
+    action_label = str(payload.get("action_label") or "").upper()
+    workflow_status = str(payload.get("workflow_status") or "").upper()
+    safe_to_verify = str(payload.get("safe_to_verify") or "").upper()
+    follow_up_required = payload.get("follow_up_required", None)
+
+    is_safe_none = (
+        action_level == "NONE"
+        or "SAFE / NONE" in action_label
+        or "SAFE / NONE" in workflow_status
+        or safe_to_verify == "SAFE"
+        or follow_up_required is False
+    )
+
+    # Only replace the fallback deviation for true SAFE / NONE cases, and only if fallback would be used
+    if (not deviation or normalized_deviation == normalized_clinical):
+        fallback_deviation = _fallback_deviation(payload)
+        # Only override if this is a true SAFE / NONE case and not a clarify/challenge or tadalafil NON_BLOCKING_PATIENT_CLARITY with specific deviation
+        if is_safe_none:
+            deviation = "No meaningful deviation detected."
+        else:
+            deviation = fallback_deviation
         normalized_deviation = _normalize_sentence_for_compare(deviation)
 
     if not risk or normalized_risk in {normalized_clinical, normalized_deviation}:

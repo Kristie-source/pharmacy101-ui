@@ -545,27 +545,50 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
     }
 
     if (status === "resolved") {
+      // Show 'COMPLETED' for completed SAFE / NONE cases, else 'RESOLVED'
+      const isSafeNone = (
+        String(item?.action_level || "").toUpperCase() === "NONE" ||
+        String(item?.action_label || "").toUpperCase().includes("SAFE / NONE") ||
+        String(item?.workflow_status || "").toUpperCase().includes("SAFE / NONE") ||
+        String(item?.lane || "").toUpperCase() === "NONE"
+      );
       return {
-        label: "RESOLVED",
-        tone: "green",
-        bg: "bg-emerald-50",
-        border: "border-emerald-300",
-        text: "text-emerald-900",
+        label: isSafeNone ? "COMPLETED" : "RESOLVED",
+        tone: isSafeNone ? "emerald" : "green",
+        bg: isSafeNone ? "bg-emerald-50" : "bg-emerald-50",
+        border: isSafeNone ? "border-emerald-300" : "border-emerald-300",
+        text: isSafeNone ? "text-emerald-900" : "text-emerald-900",
       };
     }
 
     if (
-      status === "active" &&
-      String(item?.lane || "").toUpperCase() === "VERIFY AS ENTERED" &&
-      !isFullyClearVerified(item)
+      status === "active"
     ) {
-      return {
-        label: "VERIFIED/ISSUE",
-        tone: "blue",
-        bg: "bg-sky-50",
-        border: "border-sky-300",
-        text: "text-sky-900",
-      };
+      // Show 'SAFE / NONE' for active SAFE / NONE cases
+      const isSafeNone = (
+        String(item?.action_level || "").toUpperCase() === "NONE" ||
+        String(item?.action_label || "").toUpperCase().includes("SAFE / NONE") ||
+        String(item?.workflow_status || "").toUpperCase().includes("SAFE / NONE") ||
+        String(item?.lane || "").toUpperCase() === "NONE"
+      );
+      if (isSafeNone) {
+        return {
+          label: "SAFE / NONE",
+          tone: "emerald",
+          bg: "bg-emerald-50",
+          border: "border-emerald-300",
+          text: "text-emerald-900",
+        };
+      }
+      if (String(item?.lane || "").toUpperCase() === "VERIFY AS ENTERED" && !isFullyClearVerified(item)) {
+        return {
+          label: "VERIFIED/ISSUE",
+          tone: "blue",
+          bg: "bg-sky-50",
+          border: "border-sky-300",
+          text: "text-sky-900",
+        };
+      }
     }
 
     const queueSignal = getQueueSignal(item);
@@ -808,6 +831,8 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
       "HOLD NOW": "🔴",
       "ADDRESS DURING WORKFLOW": "🟠",
       "VERIFY": "🟢",
+      "SAFE / NONE": "🟢",
+      "COMPLETED": "✅",
       "VERIFIED/ISSUE": "🔵",
       "PENDING": "🟡",
       "RESOLVED": "🟢",
