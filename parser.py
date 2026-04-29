@@ -309,6 +309,14 @@ def parse_frequency(sig: str) -> Optional[str]:
                 elif 'qid' in sig_lower:
                     return "four times daily"
 
+    # If no standard frequency found, check for contextual meal-frequency phrases
+    if "before meals" in sig_lower:
+        return "before meals"
+    elif "with meals" in sig_lower:
+        return "with meals"
+    elif "after meals" in sig_lower:
+        return "after meals"
+
     return None
 
 

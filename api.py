@@ -797,6 +797,73 @@ def analyze(input: PrescriptionInput):
         result["decision"] = "VERIFY"
         result["quality_tag"] = "Add max once daily for clarity."
 
+    # --- REVIEW pattern rules (only if decision is still VERIFY; do not override CHALLENGE or ED PRN) ---
+    if result.get("decision") == "VERIFY":
+        # 1. Duration implied but not written (finite-course antivirals/antibiotics only)
+        if (
+            any(x in drug_l for x in ["valacyclovir", "acyclovir", "famciclovir"])
+            and re.search(r"(q\d+h|bid|tid|qid|once daily|twice daily|three times daily|every \d+ hours|every \d+ days)", sig_l)
+            and parsed.quantity
+            and not re.search(r"days?|\d+\s*days?", sig_l)
+        ):
+            result["decision"] = "REVIEW"
+            result["quality_tag"] = "Add duration for clarity."
+
+        # 2. Formulation-frequency mismatch possible
+        elif (
+            "tartrate" in drug_l
+            and re.search(r"once daily|every 24 ?h|q24h|daily", sig_l)
+        ):
+            result["decision"] = "REVIEW"
+            result["quality_tag"] = "Confirm formulation/frequency intent."
+
+        # 3. Chronic med quantity mismatch (metformin only)
+        elif (
+            "metformin" in drug_l
+            and (
+                (
+                    (re.search(r"bid|twice daily", sig_l) or (getattr(parsed, "frequency", None) and "twice daily" in str(parsed.frequency).lower()))
+                    and parsed.quantity and int(parsed.quantity) < 60
+                )
+                or (
+                    (re.search(r"tid|three times daily", sig_l) or (getattr(parsed, "frequency", None) and "three times daily" in str(parsed.frequency).lower()))
+                    and parsed.quantity and int(parsed.quantity) < 90
+                )
+            )
+        ):
+            result["decision"] = "REVIEW"
+            result["quality_tag"] = "Confirm intended days supply or quantity."
+
+        # 4. High-risk med short supply (apixaban)
+        elif (
+            "apixaban" in drug_l
+            and (
+                re.search(r"bid|twice daily", sig_l)
+                or (getattr(parsed, "frequency", None) and "twice daily" in str(parsed.frequency).lower())
+            )
+            and parsed.quantity and int(parsed.quantity) <= 14
+        ):
+            result["decision"] = "REVIEW"
+            result["quality_tag"] = "Confirm intended duration or quantity."
+
+        # 5. Insulin context incomplete (but NOT invalid)
+        elif (
+            "insulin" in drug_l
+            and "before meals" in sig_l
+            and re.search(r"unit(s)?", sig_l)
+            and not re.search(r"(once|twice|three times|every|daily|bid|tid|qid|q\d+h)", sig_l)
+        ):
+            result["decision"] = "REVIEW"
+            result["quality_tag"] = "Clarify meal frequency or correction scale if intended."
+
+        # 6. Controlled PRN without explicit limit (tramadol)
+        elif (
+            "tramadol" in drug_l
+            and ("prn" in sig_l or "as needed" in sig_l)
+        ):
+            result["decision"] = "REVIEW"
+            result["quality_tag"] = "Add max daily dose or intended duration."
+
     # --- CHALLENGE pattern rules (only if decision is still VERIFY; tramadol REVIEW runs before this) ---
     if result.get("decision") == "VERIFY":
         # 1. Insulin missing units
