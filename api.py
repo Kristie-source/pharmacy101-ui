@@ -331,11 +331,27 @@ class AnalysisEventInput(BaseModel):
 def analyze(input: PrescriptionInput):
     invalid_outcome = run_invalid_bucket(input.raw_text)
     if invalid_outcome.is_invalid:
-        return {"status": "INVALID", "error": invalid_outcome.error or "Invalid input."}
+        return {
+            "status": "INVALID",
+            "error": invalid_outcome.error or "Invalid input.",
+            "decision": "CHALLENGE",
+            "quality_tag": None,
+            "workflow_status": "HOLD NOW",
+            "action_level": "HOLD_NOW",
+            "safe_to_verify": "UNSAFE"
+        }
 
     parsed = invalid_outcome.parsed
     if parsed is None:
-        return {"status": "INVALID", "error": "Invalid input."}
+        return {
+            "status": "INVALID",
+            "error": "Invalid input.",
+            "decision": "CHALLENGE",
+            "quality_tag": None,
+            "workflow_status": "HOLD NOW",
+            "action_level": "HOLD_NOW",
+            "safe_to_verify": "UNSAFE"
+        }
 
     # Require explicit drug strength for most products
     import re
@@ -343,7 +359,12 @@ def analyze(input: PrescriptionInput):
     if not strength_pattern.search(parsed.drug):
         return {
             "status": "INVALID",
-            "error": "Missing drug strength. Include drug name, strength, SIG, and quantity."
+            "error": "Missing drug strength. Include drug name, strength, SIG, and quantity.",
+            "decision": "CHALLENGE",
+            "quality_tag": None,
+            "workflow_status": "HOLD NOW",
+            "action_level": "HOLD_NOW",
+            "safe_to_verify": "UNSAFE"
         }
 
     structural = detect_structural_issue(
