@@ -744,6 +744,37 @@ def analyze(input: PrescriptionInput):
         result["deviation"] = "No prescriber clarification required; counsel patient not to exceed once daily."
         result["risk"] = "Patient may need counseling on max daily use, but prescription is usable as written."
         result["clinical_check"] = "Recognized tadalafil PRN pattern; patient-facing max daily use is not written."
+    # --- Add decision and quality_tag fields at response boundary ---
+    action_level = str(result.get("action_level", "")).upper()
+    workflow_status = str(result.get("workflow_status", "")).upper()
+    action_label = str(result.get("action_label", "")).upper()
+    safe_to_verify = str(result.get("safe_to_verify", "")).upper()
+
+
+    # --- Final quality_tag and decision logic (tramadol first, then ED PRN, then fallback) ---
+    drug = result.get("drug", getattr(input, "drug", ""))
+    sig = result.get("sig", getattr(input, "sig", ""))
+    raw_text = result.get("raw_text", getattr(input, "raw_text", ""))
+    drug_l = str(drug).lower()
+    sig_l = str(sig).lower()
+    raw_l = str(raw_text).lower()
+    combined_l = f"{drug_l} {sig_l} {raw_l}"
+
+    result["decision"] = result.get("decision") or "VERIFY"
+    result["quality_tag"] = result.get("quality_tag", None)
+
+    # Tramadol rule (must run first)
+    if ("tramadol" in combined_l and ("as needed" in combined_l or "prn" in combined_l)):
+        result["decision"] = "REVIEW"
+        result["quality_tag"] = "Add max daily dose or intended duration."
+    # ED PRN rule
+    elif (
+        ("tadalafil" in combined_l or "sildenafil" in combined_l)
+        and ("as needed" in combined_l or "prn" in combined_l)
+        and not ("max" in combined_l or "once daily" in combined_l or "1 per day" in combined_l)
+    ):
+        result["decision"] = "VERIFY"
+        result["quality_tag"] = "Add max once daily for clarity."
     return result
 
 @app.get("/health")
