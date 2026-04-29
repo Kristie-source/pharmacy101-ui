@@ -2230,9 +2230,18 @@ const summaryText = getFirstSentence(clinicalCheck);
                     : "border border-emerald-700 bg-emerald-700 px-4 py-2.5 text-white shadow-sm hover:bg-emerald-800"
                 }`}
               >
-                {resolvedButtonById[active?.id]
-                  ? "Resolved"
-                  : "Mark Resolved"}
+                {(() => {
+                  const isSafeNone =
+                    String(active?.action_level || "").toUpperCase() === "NONE" ||
+                    String(active?.lane || "").toUpperCase() === "NONE" ||
+                    String(active?.action_label || "").toUpperCase().includes("SAFE / NONE") ||
+                    String(active?.workflow_status || "").toUpperCase().includes("SAFE / NONE");
+                  return resolvedButtonById[active?.id]
+                    ? "Completed"
+                    : isSafeNone
+                      ? "Verify & Complete"
+                      : "Mark Resolved";
+                })()}
               </button>
               <button
                 type="button"
