@@ -502,14 +502,31 @@ const active = cases.find((item) => item.id === activeCaseId) || cases[0] || emp
     }
     if (
       (item.action_level || "").toUpperCase() === "NONE" ||
-      lane === "NONE"
+      lane === "NONE" ||
+      (item.action_label || "").toUpperCase().includes("SAFE / NONE") ||
+      (item.workflow_status || "").toUpperCase().includes("SAFE / NONE")
     ) {
-      return { label: "VERIFIED / NO ISSUE", tone: "green" };
+      return { label: "SAFE / NONE", tone: "green" };
     }
     return { label: "VERIFY", tone: "green" };
   };
 
   const getVisibleHeaderState = (item, status) => {
+        const isSafeNone =
+          String(item?.action_level || "").toUpperCase() === "NONE" ||
+          String(item?.lane || "").toUpperCase() === "NONE" ||
+          String(item?.action_label || "").toUpperCase().includes("SAFE / NONE") ||
+          String(item?.workflow_status || "").toUpperCase().includes("SAFE / NONE");
+
+        if (isSafeNone) {
+          return {
+            label: "SAFE / NONE",
+            tone: "green",
+            bg: "bg-emerald-50",
+            border: "border-emerald-300",
+            text: "text-emerald-900",
+          };
+        }
     if (!active) {
   return {
     title: "No active case",
