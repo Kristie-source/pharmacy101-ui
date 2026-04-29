@@ -693,17 +693,36 @@ def analyze(input: PrescriptionInput):
     result["debug_tadalafil_sig"] = sig
     result["debug_tadalafil_match"] = tadalafil_match
     if tadalafil_match:
-        result["lane"] = "SAFE"
+        result["lane"] = "NONE"
         result["issue_type"] = "NON_BLOCKING_PATIENT_CLARITY"
+        result["issue_line"] = "Patient counseling point only"
+        result["why_this_matters"] = "Counsel patient not to take more than once daily."
+        result["action_line"] = "Verify as entered; counsel max once daily."
+        result["internal_message"] = "Verify as written; counsel patient not to take more than once daily."
+        result["prescriber_message"] = ""
+        result["structure_assessment"] = "Non-blocking patient clarity"
+        result["structural_issue"] = "Patient-facing max daily use is not written; non-blocking counseling point."
+        result["documentation"] = "Tadalafil PRN prescription is usable as written; counsel patient not to exceed once daily."
+        result["override_risk"] = "Patient may need counseling on max daily use, but no prescriber clarification is required."
+        result["refresh_points"] = [
+            "Recognized pattern: tadalafil PRN/as-needed use is commonly verified without prescriber clarification.",
+            "Patient counseling point: advise patient not to take more than once daily.",
+            "Workflow impact: non-blocking; prescription is usable as written."
+        ]
+        result["refresh_conclusion"] = "No prescriber clarification required."
+        result["workflow_status"] = "SAFE / NONE"
+        result["ui_priority"] = "🟢 SAFE / NONE"
+        result["action_badge"] = "🟢 SAFE / NONE"
+        result["action_bias"] = "No action needed"
+        result["follow_up_need"] = "None"
+        result["resolution"] = "🟢 SAFE / NONE"
         result["action_level"] = "NONE"
         result["action_label"] = "SAFE / NONE"
         result["safe_to_verify"] = "SAFE"
         result["follow_up_required"] = False
-        result["prescriber_message"] = ""
-        result["action_line"] = "Verify; counsel patient not to take more than once daily."
-        result["clinical_check"] = "Recognized tadalafil PRN pattern; patient-facing max daily use is not written."
         result["deviation"] = "No prescriber clarification required; counsel patient not to exceed once daily."
         result["risk"] = "Patient may need counseling on max daily use, but prescription is usable as written."
+        result["clinical_check"] = "Recognized tadalafil PRN pattern; patient-facing max daily use is not written."
     return result
 
 @app.get("/health")
