@@ -32,6 +32,7 @@ def determine_action_threshold(
     affects: str = "",
     risk: str = "",
     pattern_assessment: str = "",
+    pattern_context_supported: bool = False,
     clinical_check: str = "",
     deviation: str = "",
     prescriber_message: str = "",
@@ -229,7 +230,7 @@ def determine_action_threshold(
                     reason="Quantity does not match total tablets required for written taper.",
                 )
     # Pattern-questionable: Address during workflow unless a higher-priority rule already returned
-    if pattern_assessment == "Pattern-questionable":
+    if pattern_assessment == "Pattern-questionable" and pattern_context_supported:
         return ActionThresholdResult(
             action_level="ADDRESS_DURING_WORKFLOW",
             badge="🟠",

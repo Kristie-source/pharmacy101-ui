@@ -215,7 +215,7 @@
         {
           "name": "weekly_regimen",
           "label": "weekly regimen",
-          "frequency_in": ["weekly"],
+          "frequency_in": ["weekly", "once weekly"],
           "quantity_min": 2,
           "disallow_prn": true
         },

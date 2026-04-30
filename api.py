@@ -441,6 +441,7 @@ def analyze(input: PrescriptionInput):
             affects=locals().get("affects"),
             risk=locals().get("override_risk") or locals().get("risk"),
             pattern_assessment=structural.pattern_assessment,
+            pattern_context_supported=structural.pattern_context_supported,
             clinical_check=locals().get("clinical_check") or locals().get("issue_line"),
             deviation=locals().get("deviation") or locals().get("why_this_matters"),
             prescriber_message=locals().get("prescriber_message"),

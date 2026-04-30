@@ -192,6 +192,7 @@ def evaluate_regimen_pattern(
             pattern_assessment="Pattern not evaluated",
         )
 
+
     entry = matched["drug"]
     low_ambiguity_regimens = entry.get("low_ambiguity_regimens", [])
     if not isinstance(low_ambiguity_regimens, list) or not low_ambiguity_regimens:
@@ -200,6 +201,13 @@ def evaluate_regimen_pattern(
             pattern_assessment="Pattern not evaluated",
         )
 
+    # Restore low_ambiguity_regimen matching
+    for regimen in low_ambiguity_regimens:
+        if _regimen_matches(regimen, sig, quantity, frequency):
+            return RegimenPatternAssessment(
+                pattern_context_supported=True,
+                pattern_assessment="Pattern-consistent",
+            )
 
     # If no regimen matches, check if the only issues are counseling/optimization (not structural ambiguity)
     # If so, do NOT escalate; return SAFE/NONE.
