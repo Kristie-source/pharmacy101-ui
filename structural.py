@@ -1,3 +1,49 @@
+def _build_decision_tags(
+    resolution=None,
+    structural_issue=None,
+    affects=None,
+    risk_severity=None,
+    immediate_usability=None,
+    workflow_status=None,
+    structure_assessment=None,
+    pattern_assessment=None,
+    pattern_issue=None,
+    pattern_context_supported=None,
+):
+    if resolution is not None:
+        res = str(resolution).upper()
+        if "NONE" in res or "SAFE" in res:
+            return {
+                "patient_interpretability": "HIGH",
+                "outcome_risk": "LOW",
+                "pharmacist_hesitation": "LOW",
+                "pattern_familiarity": "HIGH",
+                "structural_integrity": "INTACT",
+            }
+        if "CLARIFY" in res:
+            return {
+                "patient_interpretability": "LOW",
+                "outcome_risk": "MODERATE",
+                "pharmacist_hesitation": "HIGH",
+                "pattern_familiarity": "MEDIUM",
+                "structural_integrity": "SOFT_GAP",
+            }
+        if "CHALLENGE" in res:
+            return {
+                "patient_interpretability": "LOW",
+                "outcome_risk": "HIGH",
+                "pharmacist_hesitation": "HIGH",
+                "pattern_familiarity": "LOW",
+                "structural_integrity": "HARD_GAP",
+            }
+
+    return {
+        "patient_interpretability": "UNKNOWN",
+        "outcome_risk": "UNKNOWN",
+        "pharmacist_hesitation": "UNKNOWN",
+        "pattern_familiarity": "UNKNOWN",
+        "structural_integrity": "UNKNOWN",
+    }
 from dataclasses import dataclass
 from typing import Optional
 
@@ -103,11 +149,12 @@ def _is_structural_trigger(structural_issue: str, affects: str) -> bool:
 
 
 def _build_no_issue_result(recognition_status: str, recognition_match: Optional[str]) -> StructuralResult:
+    resolution_val = _normalize_resolution_label("🟢 NONE")
     return StructuralResult(
         structural_issue="No obvious structural issue detected.",
         affects="none",
         clarification="Unlikely",
-        resolution=_normalize_resolution_label("🟢 NONE"),
+        resolution=resolution_val,
         drug_recognition_status=recognition_status,
         drug_recognition_match=recognition_match,
         risk_severity="LOW",
@@ -117,6 +164,7 @@ def _build_no_issue_result(recognition_status: str, recognition_match: Optional[
         pattern_assessment="Pattern not evaluated",
         pattern_issue="",
         pattern_context_supported=False,
+        decision_tags=_build_decision_tags(resolution=resolution_val),
     )
 
 
@@ -129,11 +177,12 @@ def _build_pattern_questionable_result(
     workflow_status: str,
     resolution: str,
 ) -> StructuralResult:
+    norm_res = _normalize_resolution_label(resolution)
     return StructuralResult(
         structural_issue=f"Structurally complete, but pattern-questionable: {pattern_issue}",
         affects="pattern",
         clarification="Likely",
-        resolution=_normalize_resolution_label(resolution),
+        resolution=norm_res,
         drug_recognition_status=recognition_status,
         drug_recognition_match=recognition_match,
         risk_severity=risk_severity,
@@ -143,6 +192,7 @@ def _build_pattern_questionable_result(
         pattern_assessment="Pattern-questionable",
         pattern_issue=pattern_issue,
         pattern_context_supported=True,
+        decision_tags=_build_decision_tags(resolution=norm_res),
     )
 
 
@@ -353,6 +403,18 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
                 pattern_assessment="Pattern not evaluated",
                 pattern_issue="",
                 pattern_context_supported=False,
+                    decision_tags=_build_decision_tags(
+                        resolution=_normalize_resolution_label(classification.resolution),
+                        structural_issue=winner.pattern_result.structural_issue,
+                        affects=winner.pattern_result.affects,
+                        risk_severity=classification.risk_severity,
+                        immediate_usability=classification.immediate_usability,
+                        workflow_status=workflow_status,
+                        structure_assessment="Structural concern",
+                        pattern_assessment="Pattern not evaluated",
+                        pattern_issue="",
+                        pattern_context_supported=False,
+                    ),
             )
 
         if winner.source == "case" and winner.case_pattern is not None:
@@ -380,6 +442,18 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
                 pattern_assessment="Pattern not evaluated",
                 pattern_issue="",
                 pattern_context_supported=False,
+                    decision_tags=_build_decision_tags(
+                        resolution=resolution,
+                        structural_issue=winner.case_pattern.structural_issue,
+                        affects=winner.case_pattern.affects,
+                        risk_severity=risk_severity,
+                        immediate_usability=immediate_usability,
+                        workflow_status=workflow_status,
+                        structure_assessment="Structural concern",
+                        pattern_assessment="Pattern not evaluated",
+                        pattern_issue="",
+                        pattern_context_supported=False,
+                    ),
             )
 
     # Pattern-aware clinical reasoning layer runs only after structural checks are clear.
@@ -413,6 +487,7 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
             no_issue = _build_no_issue_result(recognition_status, recognition_match)
             no_issue.pattern_assessment = regimen_pattern.pattern_assessment
             no_issue.pattern_context_supported = True
+            # decision_tags already set in _build_no_issue_result
             return no_issue
 
     return _build_no_issue_result(recognition_status, recognition_match)

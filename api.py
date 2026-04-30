@@ -508,6 +508,7 @@ def analyze(input: PrescriptionInput):
         "pattern_assessment": structural.pattern_assessment,
         "pattern_issue": structural.pattern_issue,
         "pattern_context_supported": structural.pattern_context_supported,
+        "decision_tags": getattr(structural, "decision_tags", {}),
         "drug_recognition_status": structural.drug_recognition_status,
         "drug_recognition_match": structural.drug_recognition_match,
         "safe_to_verify": safe_to_verify,

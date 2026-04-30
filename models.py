@@ -29,6 +29,7 @@ class StructuralResult:
     pattern_assessment: str = "Pattern not evaluated"
     pattern_issue: str = ""
     pattern_context_supported: bool = False
+    decision_tags: Optional[dict] = field(default_factory=dict)
 
 
 @dataclass
