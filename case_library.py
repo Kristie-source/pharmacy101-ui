@@ -176,6 +176,39 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
     drug_lower = drug.lower()
     sig_lower = sig.lower()
 
+    # Targeted prednisone taper quantity mismatch logic
+    if drug_lower.startswith("prednisone") and "then" in sig_lower:
+        # Find all taper segments like "X tablets daily for Y days"
+        taper_segments = re.findall(r"(\d+) tablets? daily for (\d+) days?", sig_lower)
+        if len(taper_segments) >= 2:
+            required_total = sum(int(tabs) * int(days) for tabs, days in taper_segments)
+            if required_total != quantity:
+                prescriber_message = (
+                    f"Written taper requires {required_total} tablets, but quantity provided is {quantity}. Please confirm intended quantity or taper schedule."
+                )
+                internal_message = (
+                    f"Taper total ({required_total} tablets) does not match quantity ({quantity}). Clarification needed before dispensing."
+                )
+                documentation_template = (
+                    f"Prescription written for a multi-step taper totaling {required_total} tablets, but quantity provided is {quantity}. This creates a mismatch between directions and supply."
+                )
+                refresh_points = [
+                    f"Written taper requires a total of {required_total} tablets based on all segments.",
+                    f"Supplied quantity ({quantity}) does not cover the full taper.",
+                    "Verify intended total quantity or taper schedule.",
+                ]
+                return CasePattern(
+                    name="prednisone_taper_quantity_mismatch",
+                    structural_issue="Quantity does not match total required for written taper.",
+                    affects="quantity",
+                    clarification="Likely",
+                    refresh_points=refresh_points,
+                    refresh_conclusion=f"Taper total ({required_total}) does not match supplied quantity ({quantity}); verify before dispensing.",
+                    prescriber_message=prescriber_message,
+                    internal_message=internal_message,
+                    documentation_template=documentation_template,
+                )
+
     if "valacyclovir" in drug_lower and "prn" in sig_lower and frequency == "twice daily" and quantity == 28:
         implied_days = 14
 
