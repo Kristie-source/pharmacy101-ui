@@ -1,0 +1,80 @@
+[
+  {
+    "drug": "Metformin 1000 mg",
+    "sig": "take 1 tablet by mouth twice daily",
+    "quantity": 180,
+    "expected_action": "SAFE / NONE",
+    "expected_decision_tags": {
+      "patient_interpretability": "HIGH",
+      "outcome_risk": "LOW",
+      "pharmacist_hesitation": "LOW",
+      "pattern_familiarity": "HIGH",
+      "structural_integrity": "INTACT"
+    }
+  },
+  {
+    "drug": "Levothyroxine 50 mcg",
+    "sig": "take 1 tablet by mouth daily",
+    "quantity": 30,
+    "expected_action": "SAFE / NONE",
+    "expected_decision_tags": {
+      "patient_interpretability": "HIGH",
+      "outcome_risk": "LOW",
+      "pharmacist_hesitation": "LOW",
+      "pattern_familiarity": "HIGH",
+      "structural_integrity": "INTACT"
+    }
+  },
+  {
+    "drug": "Insulin glargine 100 units/mL",
+    "sig": "inject 10 units subcutaneously daily",
+    "quantity": 1,
+    "expected_action": "SAFE / NONE",
+    "expected_decision_tags": {
+      "patient_interpretability": "HIGH",
+      "outcome_risk": "LOW",
+      "pharmacist_hesitation": "LOW",
+      "pattern_familiarity": "HIGH",
+      "structural_integrity": "INTACT"
+    }
+  },
+  {
+    "drug": "Warfarin 5 mg",
+    "sig": "take 1 tablet by mouth daily",
+    "quantity": 30,
+    "expected_action": "SAFE / NONE",
+    "expected_decision_tags": {
+      "patient_interpretability": "HIGH",
+      "outcome_risk": "LOW",
+      "pharmacist_hesitation": "LOW",
+      "pattern_familiarity": "HIGH",
+      "structural_integrity": "INTACT"
+    }
+  },
+  {
+    "drug": "Gabapentin 300 mg",
+    "sig": "take 1 capsule by mouth three times daily",
+    "quantity": 90,
+    "expected_action": "SAFE / NONE",
+    "expected_decision_tags": {
+      "patient_interpretability": "HIGH",
+      "outcome_risk": "LOW",
+      "pharmacist_hesitation": "LOW",
+      "pattern_familiarity": "HIGH",
+      "structural_integrity": "INTACT"
+    }
+  },
+  {
+    "drug": "Amoxicillin 500 mg",
+    "sig": "take 1 capsule by mouth three times daily for 10 days",
+    "quantity": 30,
+    "expected_action": "SAFE / NONE",
+    "expected_decision_tags": {
+      "patient_interpretability": "HIGH",
+      "outcome_risk": "LOW",
+      "pharmacist_hesitation": "LOW",
+      "pattern_familiarity": "HIGH",
+      "structural_integrity": "INTACT"
+    }
+  }
+]

@@ -23,17 +23,16 @@ class ActionThresholdResult:
 
 
 def determine_action_threshold(
-    *,
     drug: str,
     sig: str,
-    quantity=None,
-    issue_type=None,
-    affects=None,
-    risk=None,
-    pattern_assessment=None,
-    clinical_check=None,
-    deviation=None,
-    prescriber_message=None,
+    quantity: int,
+    issue_type: str = "",
+    affects: str = "",
+    risk: str = "",
+    pattern_assessment: str = "",
+    clinical_check: str = "",
+    deviation: str = "",
+    prescriber_message: str = "",
 ) -> ActionThresholdResult:
     # Special rule: Tadalafil PRN for ED — patient counseling only, not workflow interruption
     tadalafil_prn_ed_signals = [
@@ -189,6 +188,28 @@ def determine_action_threshold(
     # -------------------------
     # If the Rx is common, executable, and no real pharmacist would stop workflow, return SAFE/NONE.
     # Do not flag for structural imperfection alone. Examples: Metformin 500 mg BID qty 60, Naproxen 500 mg BID PRN pain qty 60, Lisinopril 20 mg daily qty 30.
+    # Targeted PRN frequency/use-boundary rule (sig-based)
+    sig_lower = sig.lower()
+    if (
+        ("as needed" in sig_lower or "prn" in sig_lower)
+        and not any(x in sig_lower for x in [
+            "q4h", "q6h", "q8h", "q12h",
+            "every 4 hours", "every 6 hours", "every 8 hours", "every 12 hours",
+            "daily", "once daily",
+            "bid", "twice daily",
+            "tid", "three times daily",
+            "qid", "four times daily",
+            "qhs", "at bedtime"
+        ])
+    ):
+        return ActionThresholdResult(
+            action_level="ADDRESS_DURING_WORKFLOW",
+            badge="🟠",
+            action_label="ADDRESS DURING WORKFLOW",
+            safe_to_verify="CONDITIONAL",
+            follow_up_required=True,
+            reason="PRN directions require a frequency or maximum-use boundary before the patient can safely execute them.",
+        )
     return ActionThresholdResult(
         action_level="NONE",
         badge="🟢",

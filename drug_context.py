@@ -1,11 +1,24 @@
 from __future__ import annotations
-
 import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
+def _has_prn(sig: str) -> bool:
+    sig_lower = str(sig or "").lower()
+    return "as needed" in sig_lower or "prn" in sig_lower
 
+def _has_frequency_boundary(sig: str) -> bool:
+    sig_lower = str(sig or "").lower()
+    return any(x in sig_lower for x in [
+        "q4h", "q6h", "q8h", "q12h",
+        "every 4 hours", "every 6 hours", "every 8 hours", "every 12 hours",
+        "daily", "once daily",
+        "bid", "twice daily",
+        "tid", "three times daily",
+        "qid", "four times daily",
+        "qhs", "at bedtime"
+    ])
 
 _DB_PATH = Path(__file__).with_name("drug_context_db.json")
 
@@ -160,6 +173,18 @@ def evaluate_regimen_pattern(
     quantity: int,
     frequency: Optional[str] = None,
 ) -> RegimenPatternAssessment:
+    # PRN boundary rule: escalate if PRN present without frequency boundary
+    if _has_prn(sig) and not _has_frequency_boundary(sig):
+        return RegimenPatternAssessment(
+            pattern_context_supported=True,
+            pattern_assessment="Pattern-questionable",
+            pattern_issue="PRN present without frequency boundary",
+            risk_severity="MODERATE",
+            immediate_usability="YES",
+            workflow_status="CLARIFY USE",
+            resolution="🟠 CLARIFY USE",
+            pattern_dispensing_risk=False,
+        )
     matched = match_drug_context(drug_name)
     if not matched:
         return RegimenPatternAssessment(
@@ -175,12 +200,25 @@ def evaluate_regimen_pattern(
             pattern_assessment="Pattern not evaluated",
         )
 
-    for regimen in low_ambiguity_regimens:
-        if isinstance(regimen, dict) and _regimen_matches(regimen, sig, quantity, frequency):
-            return RegimenPatternAssessment(
-                pattern_context_supported=True,
-                pattern_assessment="Pattern-consistent",
-            )
+
+    # If no regimen matches, check if the only issues are counseling/optimization (not structural ambiguity)
+    # If so, do NOT escalate; return SAFE/NONE.
+    # True structural ambiguity is flagged by known_ambiguity_flags, not just high_risk_clarification_areas or caution notes.
+    known_ambiguity_flags = entry.get("known_ambiguity_flags", [])
+    high_risk_clarification_areas = entry.get("high_risk_clarification_areas", [])
+    structural_caution_notes = entry.get("structural_caution_notes", [])
+
+    # If there are no known_ambiguity_flags, and only high_risk_clarification_areas or caution notes, suppress escalation
+    if known_ambiguity_flags == [] and (high_risk_clarification_areas or structural_caution_notes):
+        return RegimenPatternAssessment(
+            pattern_context_supported=True,
+            pattern_assessment="Pattern-consistent",
+        )
+
+    # If the only mismatch is due to missing counseling/monitoring/optimization (not a structural ambiguity), suppress escalation
+    # This is determined by absence of explicit pattern ambiguity in the SIG (dose, route, frequency, duration, or pattern ambiguity)
+    # If the SIG is executable, do not escalate for missing counseling/monitoring/optimization
+    # (This logic can be refined if needed for more granularity)
 
     concern = str(entry.get("pattern_questionable_message", "")).strip()
     if not concern:
@@ -188,6 +226,19 @@ def evaluate_regimen_pattern(
         concern = (
             "The regimen is structurally complete, but it does not map cleanly to "
             f"common low-ambiguity use patterns for this medication ({_compact_list(common_patterns, limit=2)})."
+        )
+
+    # If the concern is only about counseling/monitoring/optimization, suppress escalation
+    counseling_keywords = [
+        "counseling", "monitoring", "timing", "titration", "optimization", "finish the course", "with meals", "empty stomach", "at bedtime", "inr", "monitor", "titrate"
+    ]
+    if (
+        any(kw in concern.lower() for kw in counseling_keywords)
+        and not known_ambiguity_flags
+    ):
+        return RegimenPatternAssessment(
+            pattern_context_supported=True,
+            pattern_assessment="Pattern-consistent",
         )
 
     severity = str(entry.get("pattern_questionable_severity", "MODERATE") or "MODERATE").upper()
