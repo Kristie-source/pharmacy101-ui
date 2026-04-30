@@ -1,3 +1,30 @@
+def _build_api_decision_tags(final_resolution: str, structural=None):
+    res = str(final_resolution).upper()
+    if "NONE" in res or "SAFE" in res:
+        return {
+            "patient_interpretability": "HIGH",
+            "outcome_risk": "LOW",
+            "pharmacist_hesitation": "LOW",
+            "pattern_familiarity": "HIGH",
+            "structural_integrity": "INTACT",
+        }
+    if "CLARIFY" in res:
+        return {
+            "patient_interpretability": "LOW",
+            "outcome_risk": "MODERATE",
+            "pharmacist_hesitation": "HIGH",
+            "pattern_familiarity": "MEDIUM",
+            "structural_integrity": "SOFT_GAP",
+        }
+    if "CHALLENGE" in res:
+        return {
+            "patient_interpretability": "LOW",
+            "outcome_risk": "HIGH",
+            "pharmacist_hesitation": "HIGH",
+            "pattern_familiarity": "LOW",
+            "structural_integrity": "HARD_GAP",
+        }
+    return getattr(structural, "decision_tags", {})
 from fastapi import FastAPI
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -508,7 +535,7 @@ def analyze(input: PrescriptionInput):
         "pattern_assessment": structural.pattern_assessment,
         "pattern_issue": structural.pattern_issue,
         "pattern_context_supported": structural.pattern_context_supported,
-        "decision_tags": getattr(structural, "decision_tags", {}),
+        "decision_tags": _build_api_decision_tags(f"{threshold.badge} {threshold.action_label}", structural),
         "drug_recognition_status": structural.drug_recognition_status,
         "drug_recognition_match": structural.drug_recognition_match,
         "safe_to_verify": safe_to_verify,
