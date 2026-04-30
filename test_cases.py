@@ -224,6 +224,18 @@ TEST_CASES = [
     {"drug": "Valacyclovir 1 gm", "sig": "take 1 tablet by mouth three times daily", "quantity": 60},
     {"drug": "Levofloxacin 750 mg", "sig": "take 1 tablet by mouth daily", "quantity": 21},
     {"drug": "Fluconazole 150 mg", "sig": "take 1 tablet by mouth daily", "quantity": 4},
+
+    # --- Segment 4: Quantity & Duration Integrity ---
+    # 1. Prednisone taper, correct quantity
+    {"drug": "Prednisone 10 mg", "sig": "take 4 tablets daily for 3 days, then 3 tablets daily for 3 days, then 2 tablets daily for 3 days, then 1 tablet daily for 3 days", "quantity": 30, "expected": "SAFE / NONE", "reason": "quantity matches taper total."},
+    # 2. Prednisone taper, insufficient quantity
+    {"drug": "Prednisone 10 mg", "sig": "take 4 tablets daily for 3 days, then 3 tablets daily for 3 days, then 2 tablets daily for 3 days, then 1 tablet daily for 3 days", "quantity": 20, "expected": "ADDRESS DURING WORKFLOW", "reason": "quantity does not match taper total."},
+    # 3. Azithromycin single dose, correct quantity
+    {"drug": "Azithromycin 500 mg", "sig": "take 2 tablets by mouth once", "quantity": 2, "expected": "SAFE / NONE", "reason": "written single dose matches quantity."},
+    # 4. Azithromycin single dose, extra quantity
+    {"drug": "Azithromycin 500 mg", "sig": "take 2 tablets by mouth once", "quantity": 4, "expected": "ADDRESS DURING WORKFLOW", "reason": "extra quantity creates unresolved patient-use ambiguity."},
+    # 5. Metformin chronic, large quantity
+    {"drug": "Metformin 500 mg", "sig": "take 1 tablet by mouth twice daily", "quantity": 180, "expected": "SAFE / NONE", "reason": "chronic maintenance quantity should not be treated as mismatch."},
 ]
 
 

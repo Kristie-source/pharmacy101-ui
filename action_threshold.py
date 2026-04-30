@@ -1,5 +1,7 @@
 # action_threshold.py
 
+
+import re
 from dataclasses import dataclass
 from typing import Literal, Optional
 
@@ -189,6 +191,7 @@ def determine_action_threshold(
     # If the Rx is common, executable, and no real pharmacist would stop workflow, return SAFE/NONE.
     # Do not flag for structural imperfection alone. Examples: Metformin 500 mg BID qty 60, Naproxen 500 mg BID PRN pain qty 60, Lisinopril 20 mg daily qty 30.
     # Targeted PRN frequency/use-boundary rule (sig-based)
+
     sig_lower = sig.lower()
     if (
         ("as needed" in sig_lower or "prn" in sig_lower)
@@ -210,6 +213,21 @@ def determine_action_threshold(
             follow_up_required=True,
             reason="PRN directions require a frequency or maximum-use boundary before the patient can safely execute them.",
         )
+
+    # Prednisone taper quantity integrity check
+    if drug.lower().startswith("prednisone") and "then" in sig.lower():
+        taper_pattern = re.findall(r"(\d+) tablets? daily for (\d+) days?", sig.lower())
+        if taper_pattern:
+            required_total = sum(int(dose) * int(days) for dose, days in taper_pattern)
+            if quantity < required_total:
+                return ActionThresholdResult(
+                    action_level="ADDRESS_DURING_WORKFLOW",
+                    badge="🟠",
+                    action_label="ADDRESS DURING WORKFLOW",
+                    safe_to_verify="CONDITIONAL",
+                    follow_up_required=True,
+                    reason="Quantity does not match total tablets required for written taper.",
+                )
     return ActionThresholdResult(
         action_level="NONE",
         badge="🟢",
