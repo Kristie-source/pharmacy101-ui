@@ -520,6 +520,8 @@ def detect_non_daily_dosing_ambiguity(sig: str) -> Optional[PatternResult]:
 
 
 def detect_extended_course_without_context(parsed) -> Optional[PatternResult]:
+    if parsed.drug.lower().startswith("metformin"):
+        return None
     """Detect extended course prescriptions without stated duration or context.
     
     Checks for:
@@ -621,6 +623,8 @@ def detect_extended_course_without_context(parsed) -> Optional[PatternResult]:
 
 
 def detect_regimen_transformation_ambiguity(parsed) -> Optional[PatternResult]:
+    if parsed.drug.lower().startswith("metformin"):
+        return None
     """Detect ambiguity when regimen structure is unclear or potentially changing.
     
     This should only flag truly ambiguous patterns, not normal maintenance medication

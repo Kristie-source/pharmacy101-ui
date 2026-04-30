@@ -609,6 +609,13 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                 (doses_per_day == 3 and quantity in [84, 90])
             )
 
+            # Metformin chronic maintenance suppression
+            is_metformin_maintenance = (
+                drug_lower.startswith("metformin")
+                and doses_per_day in [1, 2, 3]
+                and quantity >= 30
+            )
+
             # PRN/as-needed SIG guard: suppress quantity mismatch prescriber message for PRN/as-needed SIGs
             prn_terms = ["prn", "as needed", "as-needed", "when needed"]
             is_prn_sig = any(term in sig_lower for term in prn_terms)
@@ -620,7 +627,7 @@ def match_case_pattern(drug: str, sig: str, quantity: int, frequency: Optional[s
                 or unusually_long
                 or very_short
                 or long_short_term
-            ) and not is_maintenance:
+            ) and not is_maintenance and not is_metformin_maintenance:
                 structural_issue_text = "Quantity and directions imply a duration that may be inconsistent with intended course length."
                 if unusually_long:
                     structural_issue_text = f"Quantity implies an unusually long course ({implied_duration_days:.1f} days) that conflicts with current directions."
