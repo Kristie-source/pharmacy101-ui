@@ -30,6 +30,7 @@ class StructuralResult:
     pattern_issue: str = ""
     pattern_context_supported: bool = False
     decision_tags: Optional[dict] = field(default_factory=dict)
+    pattern_confidence: str = "NONE"
 
 
 @dataclass

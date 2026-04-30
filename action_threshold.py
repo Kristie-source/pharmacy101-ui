@@ -228,6 +228,17 @@ def determine_action_threshold(
                     follow_up_required=True,
                     reason="Quantity does not match total tablets required for written taper.",
                 )
+    # Pattern-questionable: Address during workflow unless a higher-priority rule already returned
+    if pattern_assessment == "Pattern-questionable":
+        return ActionThresholdResult(
+            action_level="ADDRESS_DURING_WORKFLOW",
+            badge="🟠",
+            action_label="ADDRESS DURING WORKFLOW",
+            safe_to_verify="CONDITIONAL",
+            follow_up_required=True,
+            reason="Regimen is structurally complete but does not map cleanly to a common low-ambiguity use pattern.",
+        )
+
     return ActionThresholdResult(
         action_level="NONE",
         badge="🟢",

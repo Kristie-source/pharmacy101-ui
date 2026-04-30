@@ -165,6 +165,7 @@ def _build_no_issue_result(recognition_status: str, recognition_match: Optional[
         pattern_issue="",
         pattern_context_supported=False,
         decision_tags=_build_decision_tags(resolution=resolution_val),
+        pattern_confidence="NONE",
     )
 
 
@@ -193,6 +194,7 @@ def _build_pattern_questionable_result(
         pattern_issue=pattern_issue,
         pattern_context_supported=True,
         decision_tags=_build_decision_tags(resolution=norm_res),
+        pattern_confidence="LOW",
     )
 
 
@@ -403,18 +405,19 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
                 pattern_assessment="Pattern not evaluated",
                 pattern_issue="",
                 pattern_context_supported=False,
-                    decision_tags=_build_decision_tags(
-                        resolution=_normalize_resolution_label(classification.resolution),
-                        structural_issue=winner.pattern_result.structural_issue,
-                        affects=winner.pattern_result.affects,
-                        risk_severity=classification.risk_severity,
-                        immediate_usability=classification.immediate_usability,
-                        workflow_status=workflow_status,
-                        structure_assessment="Structural concern",
-                        pattern_assessment="Pattern not evaluated",
-                        pattern_issue="",
-                        pattern_context_supported=False,
-                    ),
+                decision_tags=_build_decision_tags(
+                    resolution=_normalize_resolution_label(classification.resolution),
+                    structural_issue=winner.pattern_result.structural_issue,
+                    affects=winner.pattern_result.affects,
+                    risk_severity=classification.risk_severity,
+                    immediate_usability=classification.immediate_usability,
+                    workflow_status=workflow_status,
+                    structure_assessment="Structural concern",
+                    pattern_assessment="Pattern not evaluated",
+                    pattern_issue="",
+                    pattern_context_supported=False,
+                ),
+                pattern_confidence="NONE",
             )
 
         if winner.source == "case" and winner.case_pattern is not None:
@@ -442,18 +445,19 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
                 pattern_assessment="Pattern not evaluated",
                 pattern_issue="",
                 pattern_context_supported=False,
-                    decision_tags=_build_decision_tags(
-                        resolution=resolution,
-                        structural_issue=winner.case_pattern.structural_issue,
-                        affects=winner.case_pattern.affects,
-                        risk_severity=risk_severity,
-                        immediate_usability=immediate_usability,
-                        workflow_status=workflow_status,
-                        structure_assessment="Structural concern",
-                        pattern_assessment="Pattern not evaluated",
-                        pattern_issue="",
-                        pattern_context_supported=False,
-                    ),
+                decision_tags=_build_decision_tags(
+                    resolution=resolution,
+                    structural_issue=winner.case_pattern.structural_issue,
+                    affects=winner.case_pattern.affects,
+                    risk_severity=risk_severity,
+                    immediate_usability=immediate_usability,
+                    workflow_status=workflow_status,
+                    structure_assessment="Structural concern",
+                    pattern_assessment="Pattern not evaluated",
+                    pattern_issue="",
+                    pattern_context_supported=False,
+                ),
+                pattern_confidence="NONE",
             )
 
     # Pattern-aware clinical reasoning layer runs only after structural checks are clear.
