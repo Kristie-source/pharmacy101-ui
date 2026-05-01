@@ -1,3 +1,14 @@
+def _estimated_daily_doses_from_frequency(frequency: str) -> Optional[int]:
+    lower = (frequency or "").lower()
+    if "three times" in lower or "tid" in lower:
+        return 3
+    if "four times" in lower or "qid" in lower:
+        return 4
+    if "twice" in lower or "bid" in lower:
+        return 2
+    if "daily" in lower or "once" in lower or "qd" in lower:
+        return 1
+    return None
 # List of drugs for which strength is not required for structural analysis (pattern-safe drugs)
 PATTERN_SAFE_DRUGS = [
     "albuterol inhaler", "levalbuterol inhaler", "fluticasone inhaler", "budesonide inhaler", "epinephrine autoinjector", "epipen", "naloxone nasal spray", "naloxone autoinjector", "sumatriptan pack", "methylprednisolone dose pack", "medrol dose pack", "contraceptive pack", "norelgestromin patch", "nicotine patch", "testosterone gel pack", "insulin pen", "insulin cartridge", "insulin vial", "glucagon kit", "glucagon emergency kit"
@@ -101,6 +112,12 @@ def detect_acute_use_chronic_quantity(parsed) -> Optional[PatternResult]:
 
     if not _is_acute_use_chronic_qty_medication(parsed.drug):
         return None
+
+    daily_doses = _estimated_daily_doses_from_frequency(parsed.frequency)
+    if daily_doses:
+        estimated_days = parsed.quantity / daily_doses
+        if 5 <= estimated_days <= 14:
+            return None
 
     return PatternResult(
         pattern_name="acute_use_chronic_quantity",
