@@ -32,6 +32,7 @@ class StructuralResult:
     decision_tags: Optional[dict] = field(default_factory=dict)
     pattern_confidence: str = "NONE"
     therapy_type: str = "UNKNOWN"
+    patient_interpretability: str = "HIGH"
 
 
 @dataclass
