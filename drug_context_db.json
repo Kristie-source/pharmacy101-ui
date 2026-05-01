@@ -3,6 +3,7 @@
   "drugs": {
     "valacyclovir": {
       "generic_name": "valacyclovir",
+      "therapy_type": "EPISODIC",
       "brand_names": ["Valtrex"],
       "class": "antiviral",
       "aliases": ["valacyclovir", "valtrex"],
@@ -155,6 +156,7 @@
     },
     "lisinopril": {
       "generic_name": "lisinopril",
+      "therapy_type": "CHRONIC",
       "brand_names": ["Prinivil", "Zestril"],
       "class": "ACE inhibitor",
       "aliases": ["lisinopril", "prinivil", "zestril"],
@@ -178,6 +180,7 @@
     },
     "fluconazole": {
       "generic_name": "fluconazole",
+      "therapy_type": "ACUTE",
       "brand_names": ["Diflucan"],
       "class": "antifungal",
       "aliases": ["fluconazole", "diflucan"],

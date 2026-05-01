@@ -166,6 +166,7 @@ def _build_no_issue_result(recognition_status: str, recognition_match: Optional[
         pattern_context_supported=False,
         decision_tags=_build_decision_tags(resolution=resolution_val),
         pattern_confidence="NONE",
+            therapy_type="UNKNOWN",
     )
 
 
@@ -195,6 +196,7 @@ def _build_pattern_questionable_result(
         pattern_context_supported=True,
         decision_tags=_build_decision_tags(resolution=norm_res),
         pattern_confidence="LOW",
+            therapy_type="UNKNOWN",
     )
 
 
@@ -491,6 +493,7 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
             no_issue = _build_no_issue_result(recognition_status, recognition_match)
             no_issue.pattern_assessment = regimen_pattern.pattern_assessment
             no_issue.pattern_context_supported = True
+            no_issue.therapy_type = getattr(regimen_pattern, "therapy_type", "UNKNOWN")
             # decision_tags already set in _build_no_issue_result
             return no_issue
 

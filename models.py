@@ -31,6 +31,7 @@ class StructuralResult:
     pattern_context_supported: bool = False
     decision_tags: Optional[dict] = field(default_factory=dict)
     pattern_confidence: str = "NONE"
+    therapy_type: str = "UNKNOWN"
 
 
 @dataclass

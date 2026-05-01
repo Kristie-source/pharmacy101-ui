@@ -34,6 +34,8 @@ def _load_db() -> dict[str, Any]:
 _DRUG_CONTEXT_DB = _load_db()
 
 
+from typing import Optional
+
 @dataclass(frozen=True)
 class RegimenPatternAssessment:
     pattern_context_supported: bool
@@ -44,6 +46,7 @@ class RegimenPatternAssessment:
     workflow_status: str = "VERIFY AS ENTERED"
     resolution: str = "🟢 NONE"
     pattern_dispensing_risk: bool = False
+    therapy_type: Optional[str] = None
 
 
 def _normalize_drug_name(value: str) -> str:
@@ -194,6 +197,7 @@ def evaluate_regimen_pattern(
 
 
     entry = matched["drug"]
+    therapy_type = entry.get("therapy_type", "UNKNOWN") if isinstance(entry, dict) else "UNKNOWN"
     low_ambiguity_regimens = entry.get("low_ambiguity_regimens", [])
     if not isinstance(low_ambiguity_regimens, list) or not low_ambiguity_regimens:
         return RegimenPatternAssessment(
@@ -207,6 +211,7 @@ def evaluate_regimen_pattern(
             return RegimenPatternAssessment(
                 pattern_context_supported=True,
                 pattern_assessment="Pattern-consistent",
+                therapy_type=therapy_type,
             )
 
     # If no regimen matches, check if the only issues are counseling/optimization (not structural ambiguity)
@@ -221,6 +226,7 @@ def evaluate_regimen_pattern(
         return RegimenPatternAssessment(
             pattern_context_supported=True,
             pattern_assessment="Pattern-consistent",
+            therapy_type=therapy_type,
         )
 
     # If the only mismatch is due to missing counseling/monitoring/optimization (not a structural ambiguity), suppress escalation
