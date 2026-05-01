@@ -235,12 +235,20 @@ def evaluate_regimen_pattern(
     # (This logic can be refined if needed for more granularity)
 
     concern = str(entry.get("pattern_questionable_message", "")).strip()
+
     if not concern:
         common_patterns = entry.get("common_use_patterns", [])
-        concern = (
+        base_concern = (
             "The regimen is structurally complete, but it does not map cleanly to "
             f"common low-ambiguity use patterns for this medication ({_compact_list(common_patterns, limit=2)})."
         )
+
+        if therapy_type == "ACUTE":
+            concern = (
+                "The SIG is structurally complete, but this acute therapy does not map cleanly to a known low-ambiguity course; duration not specified or course boundary unclear."
+            )
+        else:
+            concern = base_concern
 
     # If the concern is only about counseling/monitoring/optimization, suppress escalation
     counseling_keywords = [
@@ -270,6 +278,7 @@ def evaluate_regimen_pattern(
         workflow_status=workflow_status,
         resolution=resolution,
         pattern_dispensing_risk=pattern_dispensing_risk,
+        therapy_type=therapy_type,
     )
 
 

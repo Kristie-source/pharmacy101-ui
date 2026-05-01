@@ -232,7 +232,7 @@
         }
       ],
       "pattern_questionable_severity": "MODERATE",
-      "pattern_questionable_message": "The SIG is structurally complete, but this fluconazole regimen does not map cleanly to a common low-ambiguity use pattern. The intended treatment plan may be unclear even though the directions are fully written."
+      "pattern_questionable_message": "The SIG is structurally complete, but this fluconazole regimen does not map cleanly to a common low-ambiguity use pattern; duration not specified or course boundary unclear. The intended treatment plan may be unclear even though the directions are fully written."
     }
   }
 }

@@ -178,6 +178,7 @@ def _build_pattern_questionable_result(
     immediate_usability: str,
     workflow_status: str,
     resolution: str,
+    therapy_type: str = "UNKNOWN",
 ) -> StructuralResult:
     norm_res = _normalize_resolution_label(resolution)
     return StructuralResult(
@@ -196,7 +197,7 @@ def _build_pattern_questionable_result(
         pattern_context_supported=True,
         decision_tags=_build_decision_tags(resolution=norm_res),
         pattern_confidence="LOW",
-            therapy_type="UNKNOWN",
+        therapy_type=therapy_type,
     )
 
 
@@ -481,6 +482,7 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
             immediate_usability=regimen_pattern.immediate_usability,
             workflow_status=workflow_status,
             resolution=regimen_pattern.resolution,
+            therapy_type=(getattr(regimen_pattern, "therapy_type", None) or "UNKNOWN"),
         )
 
     if is_verify_as_entered_bucket(

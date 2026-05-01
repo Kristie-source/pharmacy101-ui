@@ -32,7 +32,9 @@ def determine_action_threshold(
     affects: str = "",
     risk: str = "",
     pattern_assessment: str = "",
+    pattern_issue: str = "",
     pattern_context_supported: bool = False,
+    therapy_type: str = "UNKNOWN",
     clinical_check: str = "",
     deviation: str = "",
     prescriber_message: str = "",
@@ -57,6 +59,7 @@ def determine_action_threshold(
             affects,
             risk,
             pattern_assessment,
+            pattern_issue,
             clinical_check,
             deviation,
             prescriber_message,
@@ -96,6 +99,7 @@ def determine_action_threshold(
         affects,
         risk,
         pattern_assessment,
+        pattern_issue,
         clinical_check,
         deviation,
         prescriber_message,
@@ -137,6 +141,35 @@ def determine_action_threshold(
             safe_to_verify="UNSAFE",
             follow_up_required=True,
             reason="Verification requires an unstated assumption about dose, duration, formulation, frequency, quantity, or intent.",
+        )
+
+    # -------------------------
+    # 🟠 Segment 6: ACUTE + missing duration
+    # -------------------------
+    # If therapy_type is ACUTE and duration/course is missing or unclear,
+    # and regimen is not clearly inferable from quantity + frequency,
+    # route to ADDRESS DURING WORKFLOW (do not escalate to HOLD_NOW).
+    if (
+        therapy_type.upper() == "ACUTE"
+        and any(
+            phrase in text
+            for phrase in [
+                "no duration",
+                "duration missing",
+                "missing duration",
+                "unclear course",
+                "course boundary",
+                "duration not specified",
+            ]
+        )
+    ):
+        return ActionThresholdResult(
+            action_level="ADDRESS_DURING_WORKFLOW",
+            badge="🟠",
+            action_label="ADDRESS DURING WORKFLOW",
+            safe_to_verify="CONDITIONAL",
+            follow_up_required=True,
+            reason="Acute therapy is missing a clear duration or course boundary.",
         )
 
     # -------------------------
