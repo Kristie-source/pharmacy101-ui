@@ -1,17 +1,8 @@
+# Segment 7: Patient Interpretability helper
 def map_patient_interpretability(
-    pattern_assessment: str,
-    structural_issue: str,
     clarification: str,
     structure_assessment: str
 ) -> str:
-    """
-    Maps existing structural signals into patient-facing execution clarity.
-
-    HIGH = patient can execute without guessing
-    MEDIUM = borderline or incomplete confidence
-    LOW = patient likely must guess about use, stopping point, frequency, or max use
-    """
-
     if clarification == "Unlikely" and structure_assessment == "Structurally complete":
         return "HIGH"
 
@@ -98,28 +89,18 @@ DUR_EXCLUSION_KEYWORDS = (
     "allergy",
 )
 
-# --- Restored missing definitions ---
-from dataclasses import dataclass
-
-@dataclass
-class PriorityCandidate:
-    source: str
-    priority: int
-    pattern_result: Optional[PatternResult] = None
-    case_pattern: Optional[object] = None
-
 INTERNAL_INCONSISTENCY_PATTERN_NAMES = {
-    "internal_inconsistency",
-    "conflicting_directions",
+    "prn_scheduled_conflict",
+    "prn_with_scheduled_frequency",
+    "conflicting_sig",
 }
 
 DOSE_UNIT_FORMULATION_PATTERN_NAMES = {
-    "dose_unit_formulation_mismatch",
-    "dose_form_mismatch",
+    "dose_unit_formulation_inconsistency",
 }
 
 MINOR_OPTIMIZATION_PATTERN_NAMES = {
-    "minor_optimization",
+    "acute_use_chronic_quantity",
 }
 
 HIGH_RISK_AMBIGUITY_PATTERN_NAMES = {
@@ -127,6 +108,113 @@ HIGH_RISK_AMBIGUITY_PATTERN_NAMES = {
     "event_based_use",
 }
 
+
+@dataclass(frozen=True)
+class PriorityCandidate:
+    source: str
+    priority: int
+    pattern_result: Optional[PatternResult] = None
+    case_pattern: Optional[object] = None
+    regimen_pattern: Optional[object] = None
+
+
+def _normalize_resolution_label(value: str) -> str:
+    normalized = str(value).upper()
+    if "CLARIFY USE" in normalized:
+        return "🟠 CLARIFY USE"
+    if "COMPLETE" in normalized:
+        return "🟡 COMPLETE"
+    if "NONE" in normalized:
+        return "🟢 NONE"
+    return "🔴 CHALLENGE"
+
+
+def get_resolution(clarification: str, affects: str) -> str:
+    if clarification == "Context-dependent":
+        if affects == "instructions":
+            return _normalize_resolution_label("🟠 CLARIFY USE")
+        else:
+            return _normalize_resolution_label("🔴 CHALLENGE")
+    elif clarification == "Likely":
+        if affects in ["duration", "frequency"]:
+            return _normalize_resolution_label("🔴 CHALLENGE")
+        elif affects == "instructions":
+            return _normalize_resolution_label("🟡 COMPLETE")
+    else:
+        return _normalize_resolution_label("🟢 NONE")
+
+
+def _is_structural_trigger(structural_issue: str, affects: str) -> bool:
+    affects_value = str(affects or "").strip().lower()
+    if affects_value not in ALLOWED_STRUCTURAL_AFFECTS:
+        return False
+
+    issue_text = str(structural_issue or "").strip().lower()
+    if not issue_text or issue_text.startswith("no obvious structural issue"):
+        return False
+
+    # Hard exclusion: DUR domains cannot independently trigger a case.
+    if any(keyword in issue_text for keyword in DUR_EXCLUSION_KEYWORDS):
+        return False
+
+    return True
+
+
+def _build_no_issue_result(recognition_status: str, recognition_match: Optional[str]) -> StructuralResult:
+    resolution_val = _normalize_resolution_label("🟢 NONE")
+    return StructuralResult(
+        structural_issue="No obvious structural issue detected.",
+        affects="none",
+        clarification="Unlikely",
+        resolution=resolution_val,
+        drug_recognition_status=recognition_status,
+        drug_recognition_match=recognition_match,
+        risk_severity="LOW",
+        immediate_usability="YES",
+        workflow_status="VERIFY AS ENTERED",
+        structure_assessment="Structurally complete",
+        pattern_assessment="Pattern not evaluated",
+        pattern_issue="",
+        pattern_context_supported=False,
+        decision_tags=_build_decision_tags(resolution=resolution_val),
+        pattern_confidence="NONE",
+        therapy_type="UNKNOWN",
+        patient_interpretability=map_patient_interpretability(
+            clarification="Unlikely",
+            structure_assessment="Structurally complete",
+        ),
+    )
+
+
+def _build_pattern_questionable_result(
+    recognition_status: str,
+    recognition_match: Optional[str],
+    pattern_issue: str,
+    risk_severity: str,
+    immediate_usability: str,
+    workflow_status: str,
+    resolution: str,
+    therapy_type: str = "UNKNOWN",
+) -> StructuralResult:
+    norm_res = _normalize_resolution_label(resolution)
+    return StructuralResult(
+        structural_issue=f"Structurally complete, but pattern-questionable: {pattern_issue}",
+        affects="pattern",
+        clarification="Likely",
+        resolution=norm_res,
+        drug_recognition_status=recognition_status,
+        drug_recognition_match=recognition_match,
+        risk_severity=risk_severity,
+        immediate_usability=immediate_usability,
+        workflow_status="CLARIFY USE",
+        structure_assessment="Structurally complete",
+        pattern_assessment="Pattern-questionable",
+        pattern_issue=pattern_issue,
+        pattern_context_supported=True,
+        decision_tags=_build_decision_tags(resolution=norm_res),
+        pattern_confidence="LOW",
+        therapy_type=therapy_type,
+    )
 
 
 def _derive_risk_severity_from_resolution(resolution: str) -> str:
@@ -168,28 +256,6 @@ def _is_internal_inconsistency(pattern_name: str, issue_text: str) -> bool:
     )
     return any(marker in lower_issue for marker in contradiction_markers)
 
-
-    def map_patient_interpretability(
-        pattern_assessment: str,
-        structural_issue: str,
-        clarification: str,
-        structure_assessment: str
-    ) -> str:
-        """
-        Maps existing structural signals into patient-facing execution clarity.
-
-        HIGH = patient can execute without guessing
-        MEDIUM = borderline or incomplete confidence
-        LOW = patient likely must guess about use, stopping point, frequency, or max use
-        """
-
-        if clarification == "Unlikely" and structure_assessment == "Structurally complete":
-            return "HIGH"
-
-        if clarification == "Likely":
-            return "LOW"
-
-        return "MEDIUM"
 
 def _priority_for_pattern(pattern_name: str, issue_text: str) -> int:
     normalized_name = str(pattern_name or "").strip().lower()
@@ -262,4 +328,191 @@ def _escalation_workflow_status(
 def _choose_highest_priority_issue(candidates: list[PriorityCandidate]) -> Optional[PriorityCandidate]:
     if not candidates:
         return None
-    return max(candidates, key=lambda candidate: candidate.priority)
+    return min(candidates, key=lambda candidate: candidate.priority)
+
+
+def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optional[str] = None) -> StructuralResult:
+    from models import ParsedPrescription
+    
+    recognition_status, recognition_match = recognize_drug(drug)
+
+    structure_pattern = classify_structure_pattern(sig)
+
+    # Create a ParsedPrescription object for pattern detectors
+    parsed = ParsedPrescription(
+        raw_text="",
+        drug=drug,
+        sig=sig,
+        quantity=quantity,
+        frequency=frequency,
+        structure_pattern=structure_pattern.pattern_name,
+        structure_complete=structure_pattern.structurally_complete,
+        structure_missing=structure_pattern.missing_elements,
+    )
+
+    specific_flag_pattern = run_specific_flag_bucket(parsed)
+    generic_structural_pattern = run_generic_structural_bucket(parsed)
+    pattern = match_case_pattern(drug, sig, quantity, frequency)
+
+    prioritized_candidates: list[PriorityCandidate] = []
+
+    # Evaluate all specific detector outputs; do not short-circuit on first match.
+    for detector in SPECIFIC_FLAG_RULE_DETECTORS:
+        detected = detector(parsed)
+        if not detected:
+            continue
+        if not _is_structural_trigger(detected.structural_issue, detected.affects):
+            continue
+        prioritized_candidates.append(
+            PriorityCandidate(
+                source="pattern",
+                priority=_priority_for_pattern(detected.pattern_name, detected.structural_issue),
+                pattern_result=detected,
+            )
+        )
+
+    # Evaluate generic detector outputs; generic detectors may already internally prioritize,
+    # but still participate in global priority selection.
+    for detector in GENERIC_STRUCTURAL_RULE_DETECTORS:
+        detected = detector(parsed)
+        if not detected:
+            continue
+        if not _is_structural_trigger(detected.structural_issue, detected.affects):
+            continue
+        prioritized_candidates.append(
+            PriorityCandidate(
+                source="pattern",
+                priority=_priority_for_pattern(detected.pattern_name, detected.structural_issue),
+                pattern_result=detected,
+            )
+        )
+
+    if pattern and _is_structural_trigger(pattern.structural_issue, pattern.affects):
+        prioritized_candidates.append(
+            PriorityCandidate(
+                source="case",
+                priority=_priority_for_pattern(pattern.name, pattern.structural_issue),
+                case_pattern=pattern,
+            )
+        )
+
+    winner = _choose_highest_priority_issue(prioritized_candidates)
+    if winner is not None:
+        if winner.source == "pattern" and winner.pattern_result is not None:
+            classification = classify_pattern(winner.pattern_result)
+            selected_priority = _priority_for_pattern(
+                winner.pattern_result.pattern_name,
+                winner.pattern_result.structural_issue,
+            )
+            workflow_status = _escalation_workflow_status(
+                priority=selected_priority,
+                pattern_name=winner.pattern_result.pattern_name,
+                immediate_usability=classification.immediate_usability,
+                pattern_assessment="Pattern not evaluated",
+            )
+            return StructuralResult(
+                structural_issue=winner.pattern_result.structural_issue,
+                affects=winner.pattern_result.affects,
+                clarification=winner.pattern_result.clarification,
+                resolution=_normalize_resolution_label(classification.resolution),
+                drug_recognition_status=recognition_status,
+                drug_recognition_match=recognition_match,
+                risk_severity=classification.risk_severity,
+                immediate_usability=classification.immediate_usability,
+                workflow_status=workflow_status,
+                structure_assessment="Structural concern",
+                pattern_assessment="Pattern not evaluated",
+                pattern_issue="",
+                pattern_context_supported=False,
+                decision_tags=_build_decision_tags(
+                    resolution=_normalize_resolution_label(classification.resolution),
+                    structural_issue=winner.pattern_result.structural_issue,
+                    affects=winner.pattern_result.affects,
+                    risk_severity=classification.risk_severity,
+                    immediate_usability=classification.immediate_usability,
+                    workflow_status=workflow_status,
+                    structure_assessment="Structural concern",
+                    pattern_assessment="Pattern not evaluated",
+                    pattern_issue="",
+                    pattern_context_supported=False,
+                ),
+                pattern_confidence="NONE",
+            )
+
+        if winner.source == "case" and winner.case_pattern is not None:
+            resolution = get_resolution(winner.case_pattern.clarification, winner.case_pattern.affects)
+            risk_severity = _derive_risk_severity_from_resolution(resolution)
+            immediate_usability = _derive_immediate_usability_from_resolution(resolution)
+            selected_priority = _priority_for_pattern(winner.case_pattern.name, winner.case_pattern.structural_issue)
+            workflow_status = _escalation_workflow_status(
+                priority=selected_priority,
+                pattern_name=winner.case_pattern.name,
+                immediate_usability=immediate_usability,
+                pattern_assessment="Pattern not evaluated",
+            )
+            return StructuralResult(
+                structural_issue=winner.case_pattern.structural_issue,
+                affects=winner.case_pattern.affects,
+                clarification=winner.case_pattern.clarification,
+                resolution=resolution,
+                drug_recognition_status=recognition_status,
+                drug_recognition_match=recognition_match,
+                risk_severity=risk_severity,
+                immediate_usability=immediate_usability,
+                workflow_status=workflow_status,
+                structure_assessment="Structural concern",
+                pattern_assessment="Pattern not evaluated",
+                pattern_issue="",
+                pattern_context_supported=False,
+                decision_tags=_build_decision_tags(
+                    resolution=resolution,
+                    structural_issue=winner.case_pattern.structural_issue,
+                    affects=winner.case_pattern.affects,
+                    risk_severity=risk_severity,
+                    immediate_usability=immediate_usability,
+                    workflow_status=workflow_status,
+                    structure_assessment="Structural concern",
+                    pattern_assessment="Pattern not evaluated",
+                    pattern_issue="",
+                    pattern_context_supported=False,
+                ),
+                pattern_confidence="NONE",
+            )
+
+    # Pattern-aware clinical reasoning layer runs only after structural checks are clear.
+    # "No issue" requires both structural validity and no pattern concern.
+    regimen_pattern = evaluate_regimen_pattern(drug, sig, quantity, frequency)
+    if regimen_pattern.pattern_context_supported and regimen_pattern.pattern_assessment == "Pattern-questionable":
+        workflow_status = _escalation_workflow_status(
+            priority=5,
+            pattern_name="pattern_questionable",
+            immediate_usability=regimen_pattern.immediate_usability,
+            pattern_assessment="Pattern-questionable",
+            pattern_dispensing_risk=bool(getattr(regimen_pattern, "pattern_dispensing_risk", False)),
+        )
+        return _build_pattern_questionable_result(
+            recognition_status=recognition_status,
+            recognition_match=recognition_match,
+            pattern_issue=regimen_pattern.pattern_issue,
+            risk_severity=regimen_pattern.risk_severity,
+            immediate_usability=regimen_pattern.immediate_usability,
+            workflow_status=workflow_status,
+            resolution=regimen_pattern.resolution,
+            therapy_type=(getattr(regimen_pattern, "therapy_type", None) or "UNKNOWN"),
+        )
+
+    if is_verify_as_entered_bucket(
+        parsed,
+        specific_flag_pattern,
+        generic_structural_pattern,
+        pattern,
+    ):
+        if regimen_pattern.pattern_context_supported:
+            no_issue = _build_no_issue_result(recognition_status, recognition_match)
+            no_issue.pattern_assessment = regimen_pattern.pattern_assessment
+            no_issue.pattern_context_supported = True
+            no_issue.therapy_type = getattr(regimen_pattern, "therapy_type", "UNKNOWN")
+            # decision_tags already set in _build_no_issue_result
+            return no_issue
+
+    return _build_no_issue_result(recognition_status, recognition_match)

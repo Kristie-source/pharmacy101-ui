@@ -540,6 +540,7 @@ def analyze(input: PrescriptionInput):
         "pattern_issue": structural.pattern_issue,
         "pattern_context_supported": structural.pattern_context_supported,
         "therapy_type": getattr(structural, "therapy_type", "UNKNOWN"),
+        "patient_interpretability": getattr(structural, "patient_interpretability", "HIGH"),
         "decision_tags": _build_api_decision_tags(f"{threshold.badge} {threshold.action_label}", structural),
         "drug_recognition_status": structural.drug_recognition_status,
         "drug_recognition_match": structural.drug_recognition_match,
