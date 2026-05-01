@@ -214,6 +214,10 @@ def _build_pattern_questionable_result(
         decision_tags=_build_decision_tags(resolution=norm_res),
         pattern_confidence="LOW",
         therapy_type=therapy_type,
+        patient_interpretability=map_patient_interpretability(
+            clarification="Likely",
+            structure_assessment="Structurally complete",
+        ),
     )
 
 
@@ -437,6 +441,10 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
                     pattern_context_supported=False,
                 ),
                 pattern_confidence="NONE",
+                patient_interpretability=map_patient_interpretability(
+                    clarification=winner.pattern_result.clarification,
+                    structure_assessment="Structural concern",
+                ),
             )
 
         if winner.source == "case" and winner.case_pattern is not None:
@@ -477,6 +485,10 @@ def detect_structural_issue(drug: str, sig: str, quantity: int, frequency: Optio
                     pattern_context_supported=False,
                 ),
                 pattern_confidence="NONE",
+                patient_interpretability=map_patient_interpretability(
+                    clarification=winner.case_pattern.clarification,
+                    structure_assessment="Structural concern",
+                ),
             )
 
     # Pattern-aware clinical reasoning layer runs only after structural checks are clear.
