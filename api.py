@@ -537,6 +537,7 @@ def analyze(input: PrescriptionInput):
         "pattern_confidence": structural.pattern_confidence,
         "pattern_issue": structural.pattern_issue,
         "pattern_context_supported": structural.pattern_context_supported,
+        "therapy_type": getattr(structural, "therapy_type", "UNKNOWN"),
         "decision_tags": _build_api_decision_tags(f"{threshold.badge} {threshold.action_label}", structural),
         "drug_recognition_status": structural.drug_recognition_status,
         "drug_recognition_match": structural.drug_recognition_match,
@@ -953,6 +954,13 @@ def analyze(input: PrescriptionInput):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/debug-version")
+def debug_version():
+    return {
+        "debug_marker": "NEW_CODE_123",
+        "file": __file__,
+    }
 
 @app.post("/resolve/{analysis_id}")
 def resolve(analysis_id: int, body: ResolveInput):
